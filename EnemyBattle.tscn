@@ -1,0 +1,38 @@
+[gd_scene format=3 uid="uid://cxjsyqonmv386"]
+
+[ext_resource type="Script" uid="uid://dos5nom5hq213" path="res://enemy_battle.gd" id="1_41un6"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_r5v2j"]
+radius = 14.0
+height = 44.0
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_0p5jt"]
+size = Vector2(24, 40)
+
+[node name="EnemyBattle" type="Node2D" unique_id=1732452526]
+script = ExtResource("1_41un6")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1113661536]
+shape = SubResource("CapsuleShape2D_r5v2j")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=436522790]
+position = Vector2(-5.9604645e-08, -1.9073486e-06)
+scale = Vector2(1.328125, 1.328125)
+animation = &"Attack"
+autoplay = "Idle"
+
+[node name="Hitboxes" type="Node2D" parent="." unique_id=1671769227]
+
+[node name="AttackArea" type="Area2D" parent="Hitboxes" unique_id=1578093873]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hitboxes/AttackArea" unique_id=1372541655]
+position = Vector2(-33, 4)
+shape = SubResource("RectangleShape2D_0p5jt")
+
+[node name="IntentUI" type="Node2D" parent="." unique_id=3926386]
+visible = false
+
+[node name="Label" type="Label" parent="IntentUI" unique_id=505949650]
+visible = false
+offset_right = 40.0
+offset_bottom = 23.0

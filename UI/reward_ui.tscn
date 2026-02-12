@@ -1,0 +1,61 @@
+[gd_scene format=3 uid="uid://dj2qqrr24427l"]
+
+[ext_resource type="Script" uid="uid://brcjuuv1w8x4l" path="res://reward_ui.gd" id="1_o2248"]
+[ext_resource type="Script" uid="uid://be11khx8iq8gm" path="res://Cards/CardData.gd" id="2_nek2j"]
+[ext_resource type="Resource" uid="uid://c32enjcvn01hd" path="res://Cards/Data/Attack/Strike.tres" id="3_strike"]
+[ext_resource type="Resource" uid="uid://8v75wuw3icp2" path="res://Cards/Data/Attack/Slash.tres" id="4_slash"]
+[ext_resource type="Resource" uid="uid://bsegj7wby3wm1" path="res://Cards/Data/Defense/Shield.tres" id="5_shield"]
+[ext_resource type="Resource" uid="uid://bpxcpd6edc3u1" path="res://Cards/Data/Attack/FireSlash.tres" id="6_fire"]
+[ext_resource type="Resource" path="res://Cards/Data/Buff/EnchantedSword.tres" id="7_ench"]
+[ext_resource type="Resource" path="res://Cards/Data/Attack/QuickSlash.tres" id="8_quick"]
+[ext_resource type="Resource" path="res://Cards/Data/Attack/TwinCut.tres" id="9_twin"]
+[ext_resource type="Resource" path="res://Cards/Data/Attack/HeavySlash.tres" id="10_heavy"]
+[ext_resource type="Resource" path="res://Cards/Data/Defense/GuardUp.tres" id="11_guard"]
+[ext_resource type="Resource" path="res://Cards/Data/Defense/IronWall.tres" id="12_wall"]
+[ext_resource type="Resource" path="res://Cards/Data/Defense/CounterStance.tres" id="13_counter"]
+[ext_resource type="Resource" path="res://Cards/Data/Attack/EmberCut.tres" id="14_ember"]
+[ext_resource type="Resource" path="res://Cards/Data/Attack/BlazingStrike.tres" id="15_blaze"]
+[ext_resource type="Resource" path="res://Cards/Data/Buff/FlameOil.tres" id="16_oil"]
+[ext_resource type="Resource" path="res://Cards/Data/Buff/InfernoEdge.tres" id="17_inferno"]
+[ext_resource type="Resource" path="res://Cards/Data/Defense/SecondWind.tres" id="18_wind"]
+
+[node name="RewardUI" type="CanvasLayer" unique_id=36698394]
+process_mode = 3
+script = ExtResource("1_o2248")
+all_cards_db = Array[ExtResource("2_nek2j")]([ExtResource("3_strike"), ExtResource("4_slash"), ExtResource("5_shield"), ExtResource("6_fire"), ExtResource("7_ench"), ExtResource("8_quick"), ExtResource("9_twin"), ExtResource("10_heavy"), ExtResource("11_guard"), ExtResource("12_wall"), ExtResource("13_counter"), ExtResource("14_ember"), ExtResource("15_blaze"), ExtResource("16_oil"), ExtResource("17_inferno"), ExtResource("18_wind")])
+
+[node name="Background" type="Control" parent="." unique_id=1031078164]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ColorRect" type="ColorRect" parent="Background" unique_id=844749618]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.039215688, 0.039215688, 0.039215688, 0.5882353)
+
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=1559797068]
+offset_left = 315.0
+offset_top = 34.0
+offset_right = 787.0
+offset_bottom = 628.0
+
+[node name="Label" type="Label" parent="VBoxContainer" unique_id=1066138006]
+layout_mode = 2
+text = "Выберите карту в награду:"
+horizontal_alignment = 1
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer" unique_id=1120120953]
+custom_minimum_size = Vector2(120, 240)
+layout_mode = 2
+
+[node name="SkipRewardButton" type="Button" parent="VBoxContainer" unique_id=1040738633]
+layout_mode = 2
+text = "Skip Reward"

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bpxcpd6edc3u1"]
+
+[ext_resource type="Script" uid="uid://be11khx8iq8gm" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Resource" uid="uid://1s1avov45a4l" path="res://Cards/Effects/Burn.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "fire_slash"
+title = "Fire Slash"
+description = "Deal 6 damage. Apply Burn (2 turns)."
+damage = 6
+effect = ExtResource("2")
+effect_durability = 2
+rarity = 1
+auto_upgrade_tuning = false

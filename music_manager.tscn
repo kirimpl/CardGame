@@ -1,0 +1,17 @@
+[gd_scene format=3 uid="uid://bwubsmq1xpi6a"]
+
+[ext_resource type="Script" uid="uid://ci2d8psytqwcw" path="res://Autoload/MusicManager.gd" id="1_tylfe"]
+[ext_resource type="AudioStream" uid="uid://d3t7k8hi6gbgx" path="res://Asset/Music/Ambient 1.mp3" id="2_ylqfa"]
+[ext_resource type="AudioStream" uid="uid://dk3sh7tdx48m2" path="res://Asset/Music/Ambient 2.mp3" id="3_rn4ok"]
+[ext_resource type="AudioStream" uid="uid://cdydwiogpfux4" path="res://Asset/Music/Ambient 3.mp3" id="4_u7qmi"]
+[ext_resource type="AudioStream" uid="uid://bcmacymhegrwr" path="res://Asset/Music/Ambient 4.mp3" id="5_l0n74"]
+[ext_resource type="AudioStream" uid="uid://cp16cti4gsff6" path="res://Asset/Music/Ambient 5.mp3" id="6_6bu3j"]
+[ext_resource type="AudioStream" uid="uid://dp5o2ifd4bep2" path="res://Asset/Music/Ambient 6.mp3" id="7_wdhd3"]
+[ext_resource type="AudioStream" uid="uid://c7qw7kgdpgm24" path="res://Asset/Music/Ambient 7 .mp3" id="8_kyyes"]
+[ext_resource type="AudioStream" uid="uid://bt03hsf8ftdmp" path="res://Asset/Music/Ambient 8.mp3" id="9_22gu4"]
+[ext_resource type="AudioStream" uid="uid://d3tx4hb0028yp" path="res://Asset/Music/Ambient 9.mp3" id="10_7n7fs"]
+[ext_resource type="AudioStream" uid="uid://bmtefxkb73arp" path="res://Asset/Music/Ambient 10.mp3" id="11_eyimf"]
+
+[node name="MusicManager" type="Node" unique_id=457615666]
+script = ExtResource("1_tylfe")
+playlist = Array[AudioStream]([ExtResource("2_ylqfa"), ExtResource("3_rn4ok"), ExtResource("4_u7qmi"), ExtResource("5_l0n74"), ExtResource("6_6bu3j"), ExtResource("7_wdhd3"), ExtResource("8_kyyes"), ExtResource("9_22gu4"), ExtResource("10_7n7fs"), ExtResource("11_eyimf")])

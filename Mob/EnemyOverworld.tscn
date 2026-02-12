@@ -1,0 +1,50 @@
+[gd_scene format=3 uid="uid://cldqsa7qdpx3o"]
+
+[ext_resource type="Script" uid="uid://b80qpm71wpipj" path="res://Mob/EnemyOverworld.gd" id="1_0p5jt"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_r5v2j"]
+radius = 14.0
+height = 44.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_0p5jt"]
+radius = 148.00337
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_rj81q"]
+radius = 29.017237
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_0p5jt"]
+size = Vector2(24, 40)
+
+[node name="Enemy" type="CharacterBody2D" unique_id=1242182874]
+script = ExtResource("1_0p5jt")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1113661536]
+shape = SubResource("CapsuleShape2D_r5v2j")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=436522790]
+position = Vector2(-1, -21)
+scale = Vector2(1.328125, 1.328125)
+
+[node name="Detector" type="Area2D" parent="." unique_id=941929402]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Detector" unique_id=1264296312]
+shape = SubResource("CircleShape2D_0p5jt")
+
+[node name="Hitboxes" type="Node2D" parent="." unique_id=1671769227]
+
+[node name="AttackTrigger" type="Area2D" parent="Hitboxes" unique_id=2004333248]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hitboxes/AttackTrigger" unique_id=1594800206]
+shape = SubResource("CircleShape2D_rj81q")
+
+[node name="AttackArea" type="Area2D" parent="Hitboxes" unique_id=1578093873]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hitboxes/AttackArea" unique_id=1372541655]
+position = Vector2(-33, 4)
+shape = SubResource("RectangleShape2D_0p5jt")
+
+[connection signal="animation_finished" from="AnimatedSprite2D" to="." method="_on_animated_sprite_2d_animation_finished"]
+[connection signal="body_entered" from="Detector" to="." method="_on_detector_body_entered"]
+[connection signal="body_exited" from="Detector" to="." method="_on_detector_body_exited"]
+[connection signal="body_entered" from="Hitboxes/AttackTrigger" to="." method="_on_attack_trigger_body_entered"]
+[connection signal="body_entered" from="Hitboxes/AttackArea" to="." method="_on_attack_area_body_entered"]

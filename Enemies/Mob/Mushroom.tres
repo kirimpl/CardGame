@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Script" path="res://Enemies/EnemyData.gd" id="1"]
+[ext_resource type="SpriteFrames" path="res://Enemies/Mob/Animation/Mushroom.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+name = "Mushroom"
+sprite_frames = ExtResource("2")
+overworld_offset = Vector2(0, -20)
+battle_offset = Vector2(0, -10)
+base_hp = 18
+base_damage = 5
+min_gold = 8
+max_gold = 14
+battle_actions = Array[int]([0, 1])

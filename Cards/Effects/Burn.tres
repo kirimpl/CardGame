@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="EffectData" format=3 uid="uid://1s1avov45a4l"]
+
+[ext_resource type="Script" uid="uid://d137ftq5j14t0" path="res://Cards/EffectData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "burn"
+title = "Burn"
+description = "Takes damage at the end of the turn. Damage scales with stacks."
+type = 1
+value = 2
+default_durability = 3
+is_damage_over_time = true

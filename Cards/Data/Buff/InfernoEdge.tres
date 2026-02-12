@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Resource" path="res://Cards/Effects/Burn.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "inferno_edge"
+title = "Inferno Edge"
+description = "Next 2 attacks apply stronger Burn (2 turns)."
+cost = 2
+buff_kind = 1
+buff_charges = 2
+buff_effect = ExtResource("2")
+buff_effect_durability = 2
+rarity = 2

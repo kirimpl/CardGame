@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "heavy_slash"
+title = "Heavy Slash"
+description = "Deal 16 damage."
+cost = 2
+damage = 16
+rarity = 1

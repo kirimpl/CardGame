@@ -1,0 +1,680 @@
+extends Node2D
+
+@export var player_scene: PackedScene
+@export var enemy_scene: PackedScene
+@export var starting_deck: Array[CardData] = []
+@export var card_view_scene: PackedScene
+@export_group("Combat Tuning")
+@export var dash_time: float = 0.2
+@export var player_spawn_scale: Vector2 = Vector2(1.3, 1.3)
+@export var enemy_spawn_scale: Vector2 = Vector2(1.3, 1.3)
+@export var default_energy_max: int = 3
+@export var default_hand_size: int = 5
+@export var default_enchant_effect: EffectData = preload("res://Cards/Effects/Burn.tres")
+@export var default_enchant_effect_durability: int = 1
+@export var default_enchant_charges: int = 2
+
+@onready var player_anchor: Marker2D = $"../PlayerAnchor"
+@onready var enemy_anchor: Marker2D = $"../EnemyAnchor"
+
+# UI - Player Bar (Stanza-like)
+@onready var ui_root: Node = $"../UI/HudRoot"
+
+@onready var ui_player_bar: Control = ui_root.get_node("PlayerBar")
+@onready var ui_player_bar_back: ColorRect = ui_player_bar.get_node("Back")
+@onready var ui_player_bar_fill: ColorRect = ui_player_bar.get_node("Fill")
+@onready var ui_player_bar_text: Label = ui_player_bar.get_node("Text")
+
+@onready var ui_enemy_hp: Label = ui_root.get_node("TopBar/Margin/Row/RightGroup/EnemyHP")
+@onready var ui_gold: Label = ui_root.get_node("TopBar/Margin/Row/LeftGroup/GoldLabel")
+@onready var ui_speed_btn: Button = ui_root.get_node("TopBar/Margin/Row/LeftGroup/SpeedBtn")
+@onready var ui_enemy_intent: Label = ui_root.get_node("EnemyIntent")
+@onready var ui_enemy_bar: Control = ui_root.get_node("EnemyBar")
+@onready var ui_enemy_bar_back: ColorRect = ui_enemy_bar.get_node("Back")
+@onready var ui_enemy_bar_fill: ColorRect = ui_enemy_bar.get_node("Fill")
+@onready var ui_enemy_bar_text: Label = ui_enemy_bar.get_node("Text")
+@onready var ui_enemy_status: HBoxContainer = ui_root.get_node("EnemyStatus")
+@onready var end_btn: Button = ui_root.get_node("EndTurnBtn")
+@onready var hand_root: Control = $"../UI/HandRoot"
+@onready var hand_controller: Control = $"../UI/HandRoot/Hand"
+@onready var ui_turn_label: Label = ui_root.get_node_or_null("TurnLabel")
+@onready var ui_deck: Label = ui_root.get_node("PlayerPanel/Margin/VBox/DeckLabel")
+@onready var ui_discard: Label = ui_root.get_node("PlayerPanel/Margin/VBox/DiscardLabel")
+@onready var ui_exhaust: Label = ui_root.get_node_or_null("PlayerPanel/Margin/VBox/ExhaustLabel")
+@onready var ui_energy: Label = ui_root.get_node("PlayerPanel/Margin/VBox/EnergyLabel")
+@onready var ui_buff_stacks: Label = ui_root.get_node_or_null("PlayerPanel/Margin/VBox/BuffStacksLabel")
+@onready var ui_energy_orb_label: Label = ui_root.get_node_or_null("EnergyOrb/Value")
+
+var player: Node2D
+var enemy: Node2D
+var player_turn: bool = true
+var busy: bool = false
+
+var draw_pile: Array[CardData] = []
+var discard_pile: Array[CardData] = []
+var exhaust_pile: Array[CardData] = []
+var hand: Array[CardData] = []
+
+var energy_max: int = 3
+var energy: int = 3
+var hand_size: int = 5
+var player_defense: int = 0
+var turn_number: int = 1
+var player_turns_started: int = 0
+var enchant_attack_charges: int = 0
+var enchant_effect: EffectData = null
+var enchant_effect_durability: int = 0
+var pile_overlay: Control = null
+var pile_title_label: Label = null
+var pile_cards_grid: GridContainer = null
+
+
+func _ready() -> void:
+	if not _assert_ui():
+		return
+
+	end_btn.pressed.connect(_on_end_turn_pressed)
+	_setup_pile_ui()
+	_bind_pile_label_events()
+
+	if ui_speed_btn:
+		ui_speed_btn.pressed.connect(_on_speed_pressed)
+		ui_speed_btn.text = "x" + str(RunManager.battle_speed_mult)
+
+	Engine.time_scale = float(RunManager.battle_speed_mult)
+	_set_buttons_enabled(false)
+	energy_max = max(1, default_energy_max)
+	hand_size = max(1, default_hand_size)
+
+	await get_tree().process_frame
+	await _spawn_combatants()
+
+	_setup_deck()
+
+	_update_ui()
+	_update_energy_ui()
+	_update_deck_ui()
+	_refresh_hand_ui()
+
+	player_turn = (GameState.starter == GameState.Starter.PLAYER)
+	_start_turn()
+
+
+func _spawn_combatants() -> void:
+	var root := get_tree().current_scene
+
+	player = player_scene.instantiate()
+	root.call_deferred("add_child", player)
+
+	enemy = enemy_scene.instantiate()
+	root.call_deferred("add_child", enemy)
+
+	await get_tree().process_frame
+
+	player.global_position = player_anchor.global_position
+	enemy.global_position = enemy_anchor.global_position
+	player.z_index = 10
+	enemy.z_index = 10
+	player.scale = player_spawn_scale
+	enemy.scale = enemy_spawn_scale
+
+	if RunManager.current_enemy_data:
+		enemy.setup(RunManager.current_enemy_data, RunManager.current_floor, RunManager.current_enemy_is_elite)
+
+		if enemy.has_signal("hit_player") and not enemy.hit_player.is_connected(_on_enemy_hit_player):
+			enemy.hit_player.connect(_on_enemy_hit_player)
+	else:
+		push_error("BattleManager: Нет данных о враге!")
+
+
+func _update_ui() -> void:
+	if ui_gold:
+		ui_gold.text = "Gold: %d" % int(RunManager.gold)
+
+	# --- Player HP Bar ---
+	var p_hp := int(RunManager.current_hp)
+	var p_max := int(RunManager.max_hp)
+	var p_ratio := float(p_hp) / float(max(1, p_max))
+	
+	if ui_player_bar and ui_player_bar_fill and ui_player_bar_back:
+		ui_player_bar_fill.size.x = ui_player_bar.size.x * p_ratio
+		ui_player_bar_back.size = ui_player_bar.size
+		# STS Color logic
+		if player_defense > 0:
+			ui_player_bar_back.color = Color(0.08, 0.12, 0.35, 1) # Dark Blue
+			ui_player_bar_fill.color = Color(0.15, 0.35, 0.85, 1) # Blue
+			ui_player_bar_text.text = "🛡 %d   HP %d/%d" % [player_defense, p_hp, p_max]
+		else:
+			ui_player_bar_back.color = Color(0.35, 0.1, 0.1, 1) # Dark Red
+			ui_player_bar_fill.color = Color(0.8, 0.2, 0.2, 1) # Red
+			ui_player_bar_text.text = "HP %d/%d" % [p_hp, p_max]
+
+	# --- Enemy HP Bar ---
+	if enemy and "hp" in enemy:
+		var e_name := "Enemy"
+		if "data" in enemy and enemy.data:
+			e_name = enemy.data.name
+		if RunManager.current_enemy_is_elite:
+			e_name = "Elite " + e_name
+		ui_enemy_hp.text = "%s" % e_name
+
+		var maxv: int = int(int(enemy.max_hp) if ("max_hp" in enemy) else (int(enemy.data.base_hp) if ("data" in enemy and enemy.data) else 1))
+		maxv = max(1, maxv)
+
+		var hpv: int = max(0, int(enemy.hp))
+		var block: int = int(enemy.current_defense) if ("current_defense" in enemy) else 0
+
+		var ratio: float = float(hpv) / float(maxv)
+		if ui_enemy_bar and ui_enemy_bar_fill and ui_enemy_bar_back:
+			ui_enemy_bar_fill.size.x = ui_enemy_bar.size.x * ratio
+			ui_enemy_bar_back.size = ui_enemy_bar.size
+			if block > 0:
+				ui_enemy_bar_back.color = Color(0.08, 0.12, 0.35, 1)
+				ui_enemy_bar_fill.color = Color(0.15, 0.35, 0.85, 1)
+			else:
+				ui_enemy_bar_back.color = Color(0.35, 0.1, 0.1, 1)
+				ui_enemy_bar_fill.color = Color(0.8, 0.2, 0.2, 1)
+
+		if ui_enemy_bar_text:
+			if block > 0:
+				ui_enemy_bar_text.text = "🛡 %d   HP %d/%d" % [block, hpv, maxv]
+			else:
+				ui_enemy_bar_text.text = "HP %d/%d" % [hpv, maxv]
+
+		# Intent
+		if ui_enemy_intent and ("current_intent" in enemy):
+			var intent := int(enemy.current_intent)
+			match intent:
+				EnemyData.Intent.ATTACK:
+					ui_enemy_intent.text = "Intent: ⚔️ %d" % int(enemy.damage)
+				EnemyData.Intent.DEFEND:
+					ui_enemy_intent.text = "Intent: 🛡 +5"
+				EnemyData.Intent.BUFF:
+					ui_enemy_intent.text = "Intent: ✨"
+				_:
+					ui_enemy_intent.text = ""
+
+		# Status row
+		if ui_enemy_status:
+			for c in ui_enemy_status.get_children():
+				c.queue_free()
+
+			if enemy.has_method("get_effects"):
+				var effs: Dictionary = enemy.get_effects()
+				for k in effs.keys():
+					var v := int(effs[k])
+					if v <= 0:
+						continue
+					var l := Label.new()
+					if str(k) == "burn":
+						l.text = "🔥%d" % v
+					else:
+						l.text = "%s:%d" % [str(k), v]
+					ui_enemy_status.add_child(l)
+
+	if player and player.has_method("toggle_shield"):
+		player.toggle_shield(player_defense > 0)
+
+	if ui_buff_stacks:
+		if enchant_attack_charges > 0:
+			ui_buff_stacks.text = "Enchanted: %d" % enchant_attack_charges
+			ui_buff_stacks.visible = true
+		else:
+			ui_buff_stacks.text = "Enchanted: 0"
+			ui_buff_stacks.visible = false
+
+	if ui_turn_label:
+		ui_turn_label.text = "Turn: %d" % turn_number
+
+
+func _assert_ui() -> bool:
+	var ok := true
+	if ui_player_bar == null: ok = false
+	if ui_enemy_hp == null: ok = false
+	if end_btn == null: ok = false
+	if hand_controller == null: ok = false
+	if hand_root == null: ok = false
+	if ui_deck == null: ok = false
+	if ui_discard == null: ok = false
+	if ui_energy == null: ok = false
+	return ok
+
+
+func _setup_pile_ui() -> void:
+	pile_overlay = Control.new()
+	pile_overlay.name = "PileOverlay"
+	pile_overlay.visible = false
+	pile_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pile_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	ui_root.add_child(pile_overlay)
+
+	var dim := ColorRect.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	pile_overlay.add_child(dim)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(420, 320)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -210
+	panel.offset_top = -160
+	panel.offset_right = 210
+	panel.offset_bottom = 160
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	pile_overlay.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	panel.add_child(vbox)
+
+	pile_title_label = Label.new()
+	pile_title_label.add_theme_font_size_override("font_size", 20)
+	pile_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pile_title_label.text = "Pile"
+	vbox.add_child(pile_title_label)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size = Vector2(380, 240)
+	vbox.add_child(scroll)
+
+	pile_cards_grid = GridContainer.new()
+	pile_cards_grid.columns = 3
+	pile_cards_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pile_cards_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.add_child(pile_cards_grid)
+
+	var close_btn := Button.new()
+	close_btn.text = "Close"
+	close_btn.pressed.connect(_hide_pile_overlay)
+	vbox.add_child(close_btn)
+
+
+func _bind_pile_label_events() -> void:
+	_bind_clickable_label(ui_deck, _on_deck_label_gui_input)
+	_bind_clickable_label(ui_discard, _on_discard_label_gui_input)
+	if ui_exhaust:
+		_bind_clickable_label(ui_exhaust, _on_exhaust_label_gui_input)
+
+
+func _bind_clickable_label(label: Label, handler: Callable) -> void:
+	if label == null:
+		return
+	label.mouse_filter = Control.MOUSE_FILTER_STOP
+	label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	if not label.gui_input.is_connected(handler):
+		label.gui_input.connect(handler)
+
+
+func _setup_deck() -> void:
+	draw_pile.clear()
+	discard_pile.clear()
+	exhaust_pile.clear()
+	hand.clear()
+	turn_number = 1
+	player_turns_started = 0
+	enchant_attack_charges = 0
+	enchant_effect = null
+	enchant_effect_durability = 0
+
+	if not RunManager.deck.is_empty():
+		draw_pile = _duplicate_cards(RunManager.deck)
+	elif not starting_deck.is_empty():
+		draw_pile = _duplicate_cards(starting_deck)
+		RunManager.deck = _duplicate_cards(starting_deck)
+
+	draw_pile.shuffle()
+
+
+func _duplicate_cards(cards: Array[CardData]) -> Array[CardData]:
+	var out: Array[CardData] = []
+	for c in cards:
+		if c == null:
+			continue
+		var copy: CardData = c.duplicate(true) as CardData
+		out.append(copy if copy != null else c)
+	return out
+
+
+func _start_turn() -> void:
+	if player_turn:
+		await _start_player_turn_setup()
+		_set_buttons_enabled(true)
+	else:
+		_set_buttons_enabled(false)
+		await _enemy_action()
+
+
+func _start_player_turn_setup() -> void:
+	player_turns_started += 1
+	turn_number = player_turns_started
+	energy = energy_max
+	player_defense = 0
+	_update_energy_ui()
+	_update_ui()
+
+	await _draw_cards(hand_size)
+	_refresh_hand_ui()
+	_update_deck_ui()
+
+
+func _draw_cards(count: int) -> void:
+	for i in range(count):
+		if draw_pile.is_empty():
+			if discard_pile.is_empty():
+				break
+			draw_pile = discard_pile.duplicate()
+			draw_pile.shuffle()
+			discard_pile.clear()
+
+		hand.append(draw_pile.pop_back())
+
+	await get_tree().process_frame
+
+
+func _refresh_hand_ui() -> void:
+	if hand_controller == null:
+		return
+
+	if hand_controller.has_method("clear_hand"):
+		hand_controller.clear_hand()
+	else:
+		for child in hand_controller.get_children():
+			child.queue_free()
+
+	for card in hand:
+		var view = card_view_scene.instantiate()
+		if "use_physics" in view:
+			view.use_physics = true
+		if view.has_method("setup"):
+			view.setup(card)
+		if view.has_signal("played"):
+			view.played.connect(_on_card_played.bind(card))
+
+		if hand_controller.has_method("add_card_to_hand"):
+			hand_controller.add_card_to_hand(view)
+		else:
+			hand_controller.add_child(view)
+
+
+func _update_deck_ui() -> void:
+	ui_deck.text = "Deck: %d" % draw_pile.size()
+	ui_discard.text = "Discard: %d" % discard_pile.size()
+	if ui_exhaust:
+		ui_exhaust.text = "Exhaust: %d" % exhaust_pile.size()
+
+
+func _update_energy_ui() -> void:
+	ui_energy.text = "Energy: %d/%d" % [energy, energy_max]
+	if ui_energy_orb_label:
+		ui_energy_orb_label.text = "%d/%d" % [energy, energy_max]
+
+
+func _on_card_played(card: CardData) -> void:
+	if busy or not player_turn:
+		return
+	if energy < card.get_cost():
+		return
+	await _play_card(card)
+
+
+func _play_card(card: CardData) -> void:
+	busy = true
+	_set_buttons_enabled(false)
+
+	var card_cost: int = card.get_cost()
+	var card_damage: int = card.get_damage()
+	var card_defense: int = card.get_defense()
+	var card_effect: EffectData = card.get_effect()
+	var card_buff_effect: EffectData = card.get_buff_effect()
+	var card_buff_charges: int = card.get_buff_charges()
+
+	energy -= card_cost
+	_update_energy_ui()
+
+	# Block
+	if card_defense > 0:
+		player_defense += card_defense
+
+	# Buff card
+	if card.get_card_type() == CardData.CardType.BUFF and card.buff_kind == CardData.BuffKind.ENCHANT_ATTACK_EFFECT:
+		var charges: int = max(1, card_buff_charges if card_buff_charges > 0 else default_enchant_charges)
+		enchant_attack_charges += charges
+		enchant_effect = card_buff_effect if card_buff_effect != null else default_enchant_effect
+		if enchant_effect != null:
+			enchant_effect_durability = max(1, card.get_buff_effect_durability() if card.get_buff_effect_durability() > 0 else default_enchant_effect_durability)
+
+	# Damage + effects
+	if card_damage > 0:
+		var stop_pos: Vector2 = enemy.global_position + Vector2(-80.0, 0.0)
+		await _dash_to(player, stop_pos)
+
+		if player.has_method("attack_sequence"):
+			await player.call("attack_sequence", enemy)
+
+		if is_instance_valid(enemy) and enemy.has_method("take_damage"):
+			enemy.take_damage(card_damage)
+
+			# Эффект (EffectData)
+			if card.has_method("has_effect") and card.has_effect() and enemy.has_method("apply_effect") and card_effect != null:
+				var eff_dur: int = card.get_effect_durability()
+				if eff_dur > 0:
+					enemy.apply_effect(card_effect, eff_dur)
+
+			# Temporary enchant: next N attack cards additionally apply effect.
+			if enchant_attack_charges > 0 and enchant_effect != null and enemy.has_method("apply_effect"):
+				enemy.apply_effect(enchant_effect, enchant_effect_durability)
+				enchant_attack_charges -= 1
+
+		await _dash_to(player, player_anchor.global_position)
+
+	# move card to discard
+	var idx := hand.find(card)
+	if idx != -1:
+		hand.remove_at(idx)
+	if card.get_exhaust():
+		exhaust_pile.append(card)
+	else:
+		discard_pile.append(card)
+
+	_refresh_hand_ui()
+	_update_deck_ui()
+	_update_ui()
+
+	if (enemy == null) or (not is_instance_valid(enemy)) or (("hp" in enemy) and int(enemy.hp) <= 0):
+		_on_enemy_dead()
+		return
+
+	busy = false
+	_set_buttons_enabled(true)
+
+
+func _on_enemy_dead() -> void:
+	if is_instance_valid(enemy):
+		enemy.queue_free()
+
+	var g_min := 10
+	var g_max := 25
+	if RunManager.current_enemy_data:
+		g_min = int(RunManager.current_enemy_data.min_gold)
+		g_max = int(RunManager.current_enemy_data.max_gold)
+	var rolled_gold: int = randi_range(g_min, g_max)
+	if RunManager.current_enemy_is_elite:
+		rolled_gold = int(round(float(rolled_gold) * RunManager.elite_gold_multiplier))
+	RunManager.pending_gold = rolled_gold
+
+	RunManager.returning_from_fight = true
+	RunManager.reward_claimed = false
+	get_tree().change_scene_to_file("res://level.tscn")
+
+
+func _dash_to(actor: Node2D, target_pos: Vector2) -> void:
+	var t := create_tween()
+	t.tween_property(actor, "global_position", target_pos, dash_time)
+	await t.finished
+
+
+func _on_end_turn_pressed() -> void:
+	if busy or not player_turn:
+		return
+
+	# 1) discard hand
+	for card in hand:
+		discard_pile.append(card)
+	hand.clear()
+
+	_refresh_hand_ui()
+	_update_deck_ui()
+	_set_buttons_enabled(false)
+
+	# 2) tick effects (end turn iteration)
+	await _tick_end_turn_effects()
+	_update_ui()
+
+	if (enemy == null) or (not is_instance_valid(enemy)) or (("hp" in enemy) and int(enemy.hp) <= 0):
+		_on_enemy_dead()
+		return
+
+	# 3) enemy turn
+	player_turn = false
+	_start_turn()
+
+
+func _tick_end_turn_effects() -> void:
+	if is_instance_valid(enemy) and enemy.has_method("tick_end_turn_effects"):
+		await enemy.call("tick_end_turn_effects")
+
+
+func _on_enemy_hit_player(_target: Node) -> void:
+	var dmg: int = 0
+	if is_instance_valid(enemy) and ("damage" in enemy):
+		dmg = int(enemy.damage)
+
+	var taken: int = max(0, dmg - player_defense)
+	player_defense = max(0, player_defense - dmg)
+
+	if taken > 0:
+		RunManager.current_hp = max(0, int(RunManager.current_hp) - taken)
+		if is_instance_valid(player) and player.has_method("play_take_damage"):
+			player.call("play_take_damage")
+
+	if int(RunManager.current_hp) <= 0:
+		get_tree().change_scene_to_file("res://menu.tscn")
+		return
+
+	_update_ui()
+
+
+func _enemy_action() -> void:
+	if not is_instance_valid(enemy):
+		player_turn = true
+		return
+
+	_update_ui()
+
+	if ("hp" in enemy) and int(enemy.hp) <= 0:
+		_on_enemy_dead()
+		return
+
+	if enemy.has_signal("turn_finished") and not enemy.turn_finished.is_connected(_on_enemy_turn_finished):
+		enemy.turn_finished.connect(_on_enemy_turn_finished)
+
+	if enemy.has_signal("hit_player") and not enemy.hit_player.is_connected(_on_enemy_hit_player):
+		enemy.hit_player.connect(_on_enemy_hit_player)
+
+	if enemy.has_method("take_turn"):
+		await enemy.call("take_turn", player, player_defense)
+	else:
+		_on_enemy_hit_player(player)
+
+	if not player_turn:
+		player_turn = true
+		_start_turn()
+
+
+func _on_enemy_turn_finished() -> void:
+	player_turn = true
+	busy = false
+	_set_buttons_enabled(true)
+	_update_ui()
+	_start_turn()
+
+
+func _set_buttons_enabled(enabled: bool) -> void:
+	end_btn.disabled = not enabled
+
+
+func _on_speed_pressed() -> void:
+	RunManager.battle_speed_mult += 1
+	if RunManager.battle_speed_mult > int(RunManager.battle_speed_max):
+		RunManager.battle_speed_mult = int(RunManager.battle_speed_min)
+	Engine.time_scale = float(RunManager.battle_speed_mult)
+	if ui_speed_btn:
+		ui_speed_btn.text = "x" + str(RunManager.battle_speed_mult)
+
+
+func _on_deck_label_gui_input(event: InputEvent) -> void:
+	if _is_left_click(event):
+		_show_pile("Deck", draw_pile)
+
+
+func _on_discard_label_gui_input(event: InputEvent) -> void:
+	if _is_left_click(event):
+		_show_pile("Discard", discard_pile)
+
+
+func _on_exhaust_label_gui_input(event: InputEvent) -> void:
+	if _is_left_click(event):
+		_show_pile("Exhaust", exhaust_pile)
+
+
+func _is_left_click(event: InputEvent) -> bool:
+	return event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT
+
+
+func _show_pile(title: String, cards: Array[CardData]) -> void:
+	if pile_overlay == null or pile_title_label == null or pile_cards_grid == null:
+		return
+	pile_title_label.text = "%s (%d)" % [title, cards.size()]
+	_render_pile_cards(cards)
+	pile_overlay.visible = true
+
+
+func _hide_pile_overlay() -> void:
+	if pile_overlay:
+		pile_overlay.visible = false
+
+
+func _render_pile_cards(cards: Array[CardData]) -> void:
+	if pile_cards_grid == null:
+		return
+
+	for child in pile_cards_grid.get_children():
+		child.queue_free()
+
+	if cards.is_empty():
+		var empty_label := Label.new()
+		empty_label.text = "Empty"
+		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		empty_label.add_theme_font_size_override("font_size", 18)
+		pile_cards_grid.add_child(empty_label)
+		return
+
+	for card in cards:
+		if card == null:
+			continue
+		var card_view: CardView = card_view_scene.instantiate() as CardView
+		if card_view == null:
+			continue
+		card_view.custom_minimum_size = Vector2(120, 160)
+		card_view.use_physics = false
+		card_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card_view.setup(card)
+		pile_cards_grid.add_child(card_view)
+
+
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0

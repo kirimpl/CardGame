@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bsegj7wby3wm1"]
+
+[ext_resource type="Script" uid="uid://be11khx8iq8gm" path="res://Cards/CardData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "shield"
+title = "Shield"
+description = "Gain 7 block."
+defense = 7
+metadata/_custom_type_script = "uid://be11khx8iq8gm"

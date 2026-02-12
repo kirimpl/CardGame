@@ -1,0 +1,175 @@
+[gd_scene format=3 uid="uid://b0qoa7rel7exk"]
+
+[ext_resource type="Script" uid="uid://ckkplk0ot0rcy" path="res://UI/card_view.gd" id="1_pqrer"]
+[ext_resource type="Texture2D" uid="uid://bkj2b227f73tr" path="res://Asset/Card/Modular_Fantasy_Cards_Spritesheet.png" id="1_upti4"]
+[ext_resource type="Texture2D" uid="uid://chcdq7tsfj5qj" path="res://Asset/UIIcons/ShieldIcon.png" id="3_newdn"]
+[ext_resource type="Texture2D" uid="uid://c8fkm4shqwtka" path="res://Asset/UIIcons/katana.png" id="4_katana"]
+[ext_resource type="Texture2D" uid="uid://b7l70oi1o4ryf" path="res://Asset/UIIcons/katana_fire.png" id="5_katana_fire"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_qh6n4"]
+atlas = ExtResource("3_newdn")
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_upti4"]
+atlas = ExtResource("1_upti4")
+region = Rect2(462, 109, 64, 48)
+
+[sub_resource type="Gradient" id="Gradient_n1itj"]
+offsets = PackedFloat32Array(0, 0.3941368, 1)
+colors = PackedColorArray(0, 0, 0, 1, 0.446777, 0.44677705, 0.44677705, 1, 0.8560673, 0.8560673, 0.85606724, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_e2d0f"]
+gradient = SubResource("Gradient_n1itj")
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_10d5n"]
+atlas = ExtResource("1_upti4")
+region = Rect2(232, 107, 68, 95)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_pqrer"]
+atlas = ExtResource("1_upti4")
+region = Rect2(463, 164, 62, 36)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_newdn"]
+atlas = ExtResource("1_upti4")
+region = Rect2(725, 1, 14, 14)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_n1itj"]
+atlas = ExtResource("1_upti4")
+region = Rect2(536, 231, 64, 10)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_e2d0f"]
+atlas = ExtResource("1_upti4")
+region = Rect2(685, 89, 15, 20)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pqrer"]
+bg_color = Color(0.96035105, 0.96035105, 0.96035093, 1)
+corner_radius_top_left = 15
+corner_radius_top_right = 15
+corner_radius_bottom_right = 15
+corner_radius_bottom_left = 15
+corner_detail = 2
+
+[node name="CardView" type="Control" unique_id=782862917]
+clip_contents = true
+custom_minimum_size = Vector2(117, 160)
+layout_mode = 3
+anchors_preset = 0
+offset_right = 117.0
+offset_bottom = 160.0
+script = ExtResource("1_pqrer")
+icon_attack = ExtResource("4_katana")
+icon_attack_fire = ExtResource("5_katana_fire")
+icon_defense = SubResource("AtlasTexture_qh6n4")
+icon_buff = ExtResource("5_katana_fire")
+
+[node name="CardRam" type="TextureRect" parent="." unique_id=1422661269]
+light_mask = 0
+layout_mode = 0
+offset_left = 4.0
+offset_top = 3.4978638
+offset_right = 112.0
+offset_bottom = 86.49786
+texture = SubResource("AtlasTexture_upti4")
+expand_mode = 1
+
+[node name="Panel" type="TextureRect" parent="CardRam" unique_id=73152354]
+z_index = -1
+layout_mode = 0
+offset_left = 2.0
+offset_top = -0.49786377
+offset_right = 108.0
+offset_bottom = 82.50214
+texture = SubResource("GradientTexture2D_e2d0f")
+expand_mode = 1
+
+[node name="CardMainIcon" type="TextureRect" parent="CardRam" unique_id=524165180]
+layout_mode = 0
+offset_left = 10.0
+offset_top = -0.49786377
+offset_right = 104.117645
+offset_bottom = 79.50214
+texture = SubResource("AtlasTexture_qh6n4")
+expand_mode = 2
+
+[node name="CardBG" type="TextureRect" parent="." unique_id=2105709971]
+layout_mode = 0
+offset_left = -2.0
+offset_right = 118.0
+offset_bottom = 159.14163
+texture = SubResource("AtlasTexture_10d5n")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="CardBox" type="TextureRect" parent="." unique_id=278336005]
+layout_mode = 0
+offset_left = 6.0
+offset_top = 95.49786
+offset_right = 109.41464
+offset_bottom = 156.49786
+texture = SubResource("AtlasTexture_pqrer")
+expand_mode = 1
+
+[node name="DescLabel" type="Label" parent="CardBox" unique_id=946262234]
+layout_mode = 0
+offset_left = 5.0
+offset_top = 5.0
+offset_right = 99.0
+offset_bottom = 56.0
+theme_override_font_sizes/font_size = 10
+text = "Card Description"
+autowrap_mode = 3
+text_overrun_behavior = 3
+max_lines_visible = 4
+
+[node name="CardIcon" type="TextureRect" parent="." unique_id=1518909129]
+layout_mode = 0
+offset_left = 98.0
+offset_top = 1.4978638
+offset_right = 113.0
+offset_bottom = 16.497864
+texture = SubResource("AtlasTexture_newdn")
+
+[node name="CardNameBox" type="TextureRect" parent="." unique_id=1962622647]
+layout_mode = 0
+offset_left = 4.0
+offset_top = 75.49786
+offset_right = 112.0
+offset_bottom = 87.49786
+texture = SubResource("AtlasTexture_n1itj")
+expand_mode = 1
+
+[node name="NameLabel" type="Label" parent="CardNameBox" unique_id=6879064]
+layout_mode = 0
+offset_left = 3.0
+offset_right = 105.0
+offset_bottom = 12.0
+theme_override_font_sizes/font_size = 8
+text = "Name"
+horizontal_alignment = 1
+
+[node name="CardCostBoxIcon" type="TextureRect" parent="." unique_id=1822928933]
+layout_mode = 0
+offset_left = 1.0
+offset_top = 0.49786377
+offset_right = 20.5
+offset_bottom = 24.872864
+texture = SubResource("AtlasTexture_e2d0f")
+
+[node name="CostBackground" type="Panel" parent="CardCostBoxIcon" unique_id=1283623440]
+layout_mode = 0
+offset_left = 2.5
+offset_top = 1.0
+offset_right = 16.5
+offset_bottom = 16.502136
+theme_override_styles/panel = SubResource("StyleBoxFlat_pqrer")
+
+[node name="CardCost" type="Label" parent="CardCostBoxIcon/CostBackground" unique_id=1076350981]
+layout_mode = 0
+offset_left = 4.0
+offset_top = -0.49786377
+offset_right = 11.0
+offset_bottom = 13.502136
+theme_override_colors/font_color = Color(0.00011382803, 0.00011382803, 0.00011382803, 1)
+theme_override_font_sizes/font_size = 10
+text = "Cost"
+horizontal_alignment = 1
+vertical_alignment = 1
