@@ -16,7 +16,7 @@ class_name CardData
 
 enum CardType { ATTACK, DEFENSE, BUFF }
 enum BuffKind { NONE, ENCHANT_ATTACK_EFFECT }
-enum Rarity { COMMON, UNCOMMON, RARE }
+enum Rarity { COMMON, UNCOMMON, RARE, LEGENDARY }
 
 @export_group("Meta")
 @export var rarity: Rarity = Rarity.COMMON
@@ -183,5 +183,7 @@ func get_rarity_name() -> String:
 			return "Uncommon"
 		Rarity.RARE:
 			return "Rare"
+		Rarity.LEGENDARY:
+			return "Legendary"
 		_:
 			return "Common"

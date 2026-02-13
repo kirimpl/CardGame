@@ -1,5 +1,7 @@
 extends Node2D
 
+const RELIC_FALLBACK_ICON: Texture2D = preload("res://icon.svg")
+
 var fight_started := false
 var enemy: Node = null
 
@@ -14,6 +16,9 @@ var enemy: Node = null
 @onready var gold_label: Label = get_node_or_null("HUD/GoldLabel")
 @onready var floor_label: Label = get_node_or_null("HUD/FloorLabel")
 
+var relic_panel: PanelContainer = null
+var relic_icons_row: HBoxContainer = null
+
 func _ready() -> void:
 	# Синхронизируем HP
 	if player and ("hp" in player):
@@ -27,6 +32,7 @@ func _ready() -> void:
 		_setup_victory_state()
 	else:
 		_setup_battle_state()
+	_setup_relic_panel()
 
 func _setup_battle_state() -> void:
 	_spawn_random_enemy()
@@ -129,3 +135,46 @@ func _update_hud() -> void:
 		gold_label.text = "Gold: %d" % int(RunManager.gold)
 	if floor_label:
 		floor_label.text = "Floor: %d" % int(RunManager.current_floor)
+	_refresh_relic_panel()
+
+
+func _setup_relic_panel() -> void:
+	var hud: CanvasLayer = get_node_or_null("HUD")
+	if hud == null:
+		return
+	relic_panel = PanelContainer.new()
+	relic_panel.name = "RelicPanel"
+	relic_panel.anchor_left = 1.0
+	relic_panel.anchor_top = 0.0
+	relic_panel.anchor_right = 1.0
+	relic_panel.anchor_bottom = 0.0
+	relic_panel.offset_left = -330.0
+	relic_panel.offset_top = 8.0
+	relic_panel.offset_right = -8.0
+	relic_panel.offset_bottom = 56.0
+	relic_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud.add_child(relic_panel)
+
+	relic_icons_row = HBoxContainer.new()
+	relic_icons_row.alignment = BoxContainer.ALIGNMENT_END
+	relic_icons_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	relic_panel.add_child(relic_icons_row)
+	_refresh_relic_panel()
+
+
+func _refresh_relic_panel() -> void:
+	if relic_icons_row == null:
+		return
+	for child in relic_icons_row.get_children():
+		child.queue_free()
+
+	for relic in RunManager.relics:
+		if relic == null:
+			continue
+		var icon_holder := TextureRect.new()
+		icon_holder.custom_minimum_size = Vector2(34, 34)
+		icon_holder.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		icon_holder.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_holder.texture = relic.icon if relic.icon != null else RELIC_FALLBACK_ICON
+		icon_holder.tooltip_text = "%s\n%s" % [relic.get_display_name(), relic.description]
+		relic_icons_row.add_child(icon_holder)

@@ -50,11 +50,13 @@ corner_detail = 2
 
 [node name="CardView" type="Control" unique_id=782862917]
 clip_contents = true
-custom_minimum_size = Vector2(117, 160)
+custom_minimum_size = Vector2(140, 180)
 layout_mode = 3
 anchors_preset = 0
-offset_right = 117.0
-offset_bottom = 160.0
+offset_left = 46.0
+offset_top = 32.0
+offset_right = 166.0
+offset_bottom = 202.0
 script = ExtResource("1_pqrer")
 icon_attack = ExtResource("4_katana")
 icon_attack_fire = ExtResource("5_katana_fire")
@@ -64,10 +66,10 @@ icon_buff = ExtResource("5_katana_fire")
 [node name="CardRam" type="TextureRect" parent="." unique_id=1422661269]
 light_mask = 0
 layout_mode = 0
-offset_left = 4.0
-offset_top = 3.4978638
-offset_right = 112.0
-offset_bottom = 86.49786
+offset_left = 10.0
+offset_top = 12.497864
+offset_right = 118.0
+offset_bottom = 95.49786
 texture = SubResource("AtlasTexture_upti4")
 expand_mode = 1
 
@@ -92,19 +94,20 @@ expand_mode = 2
 
 [node name="CardBG" type="TextureRect" parent="." unique_id=2105709971]
 layout_mode = 0
-offset_left = -2.0
-offset_right = 118.0
-offset_bottom = 159.14163
+offset_left = 4.0
+offset_top = 9.0
+offset_right = 124.0
+offset_bottom = 168.14163
 texture = SubResource("AtlasTexture_10d5n")
 expand_mode = 1
 stretch_mode = 5
 
 [node name="CardBox" type="TextureRect" parent="." unique_id=278336005]
 layout_mode = 0
-offset_left = 6.0
-offset_top = 95.49786
-offset_right = 109.41464
-offset_bottom = 156.49786
+offset_left = 12.0
+offset_top = 104.49786
+offset_right = 115.41464
+offset_bottom = 165.49786
 texture = SubResource("AtlasTexture_pqrer")
 expand_mode = 1
 
@@ -122,18 +125,18 @@ max_lines_visible = 4
 
 [node name="CardIcon" type="TextureRect" parent="." unique_id=1518909129]
 layout_mode = 0
-offset_left = 98.0
-offset_top = 1.4978638
-offset_right = 113.0
-offset_bottom = 16.497864
+offset_left = 104.0
+offset_top = 10.497864
+offset_right = 119.0
+offset_bottom = 25.497864
 texture = SubResource("AtlasTexture_newdn")
 
 [node name="CardNameBox" type="TextureRect" parent="." unique_id=1962622647]
 layout_mode = 0
-offset_left = 4.0
-offset_top = 75.49786
-offset_right = 112.0
-offset_bottom = 87.49786
+offset_left = 10.0
+offset_top = 84.49786
+offset_right = 118.0
+offset_bottom = 96.49786
 texture = SubResource("AtlasTexture_n1itj")
 expand_mode = 1
 
@@ -148,10 +151,10 @@ horizontal_alignment = 1
 
 [node name="CardCostBoxIcon" type="TextureRect" parent="." unique_id=1822928933]
 layout_mode = 0
-offset_left = 1.0
-offset_top = 0.49786377
-offset_right = 20.5
-offset_bottom = 24.872864
+offset_left = 7.0
+offset_top = 9.497864
+offset_right = 26.5
+offset_bottom = 33.872864
 texture = SubResource("AtlasTexture_e2d0f")
 
 [node name="CostBackground" type="Panel" parent="CardCostBoxIcon" unique_id=1283623440]
@@ -173,3 +176,12 @@ theme_override_font_sizes/font_size = 10
 text = "Cost"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="CardRarityRam" type="TextureRect" parent="." unique_id=658989200]
+visibility_layer = 2
+z_index = 1
+layout_mode = 0
+offset_left = 1.0
+offset_top = 3.0
+offset_right = 126.0
+offset_bottom = 174.0

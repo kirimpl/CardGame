@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RelicData" format=3 uid="uid://ckg15us7uerf5"]
+
+[ext_resource type="Script" uid="uid://2byr5g5sl7w2" path="res://Relic/RelicData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "war_banner"
+title = "War Banner"
+description = "Attack cards get +2 damage."
+rarity = 2
+card_id_filters = PackedStringArray()
+use_card_type_filter = true
+attack_damage_bonus = 2

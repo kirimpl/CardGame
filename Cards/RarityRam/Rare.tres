@@ -1,0 +1,7 @@
+[gd_resource type="AtlasTexture" format=3 uid="uid://btjucsir8ktrc"]
+
+[ext_resource type="Texture2D" uid="uid://bkj2b227f73tr" path="res://Asset/Card/Modular_Fantasy_Cards_Spritesheet.png" id="1_6oyti"]
+
+[resource]
+atlas = ExtResource("1_6oyti")
+region = Rect2(532, 0, 76, 103)

@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="RelicData" format=3 uid="uid://c2xxiuabjyvvt"]
+
+[ext_resource type="Script" uid="uid://2byr5g5sl7w2" path="res://Relic/RelicData.gd" id="1_kgqh1"]
+
+[resource]
+script = ExtResource("1_kgqh1")
+card_id_filters = null
+metadata/_custom_type_script = "uid://2byr5g5sl7w2"

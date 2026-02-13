@@ -1,6 +1,13 @@
 extends CanvasLayer
 
+const RELIC_FALLBACK_ICON: Texture2D = preload("res://icon.svg")
+
 @export var all_cards_db: Array[CardData] = []
+@export var all_relics_db: Array[RelicData] = [
+	preload("res://Relic/Data/VitalCore.tres"),
+	preload("res://Relic/Data/PhoenixFeather.tres"),
+	preload("res://Relic/Data/WarBanner.tres"),
+]
 @export var reward_count: int = 3
 @export_range(0.0, 1.0, 0.01) var normal_common_weight: float = 0.7
 @export_range(0.0, 1.0, 0.01) var normal_uncommon_weight: float = 0.25
@@ -10,8 +17,10 @@ extends CanvasLayer
 @export_range(0.0, 1.0, 0.01) var elite_rare_weight: float = 0.25
 @export_range(0.0, 1.0, 0.01) var normal_upgrade_chance: float = 0.12
 @export_range(0.0, 1.0, 0.01) var elite_upgrade_chance: float = 0.33
+@export_range(0.0, 1.0, 0.01) var normal_relic_reward_chance: float = 0.3
 
 @onready var card_container: HBoxContainer = $VBoxContainer/HBoxContainer
+@onready var root_vbox: VBoxContainer = $VBoxContainer
 @onready var skip_btn: Button = $VBoxContainer/SkipRewardButton
 @onready var gold_label: Label = $VBoxContainer/GoldLabel if has_node("VBoxContainer/GoldLabel") else null
 @onready var card_scene: PackedScene = preload("res://UI/CardView.tscn")
@@ -27,7 +36,55 @@ func _ready() -> void:
 			gold_label.text = "Gold +%d" % int(RunManager.pending_gold)
 		RunManager.pending_gold = 0
 
+	_try_grant_relic_reward()
 	_generate_card_rewards()
+
+
+func _try_grant_relic_reward() -> void:
+	if all_relics_db.is_empty():
+		return
+
+	var guaranteed: bool = RunManager.current_enemy_is_elite
+	var rolled: bool = guaranteed or randf() < normal_relic_reward_chance
+	if not rolled:
+		return
+
+	var candidates: Array[RelicData] = []
+	for relic in all_relics_db:
+		if relic == null:
+			continue
+		if relic.id != "" and RunManager.has_relic_id(relic.id):
+			continue
+		candidates.append(relic)
+	if candidates.is_empty():
+		return
+
+	var picked: RelicData = candidates.pick_random() as RelicData
+	if picked == null:
+		return
+
+	RunManager.add_relic(picked)
+	_show_relic_notice(picked)
+
+
+func _show_relic_notice(relic: RelicData) -> void:
+	var box := HBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	root_vbox.add_child(box)
+	root_vbox.move_child(box, 1)
+
+	var icon := TextureRect.new()
+	icon.custom_minimum_size = Vector2(28, 28)
+	icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture = relic.icon if relic.icon != null else RELIC_FALLBACK_ICON
+	icon.tooltip_text = "%s\n%s" % [relic.get_display_name(), relic.description]
+	box.add_child(icon)
+
+	var label := Label.new()
+	label.text = "Relic: %s" % relic.get_display_name()
+	label.tooltip_text = "%s\n%s" % [relic.get_display_name(), relic.description]
+	box.add_child(label)
 
 func _generate_card_rewards() -> void:
 	if card_container == null:
@@ -59,7 +116,7 @@ func _generate_card_rewards() -> void:
 		var reward_card: CardData = _build_reward_card(card_data)
 		var card_view: CardView = card_scene.instantiate() as CardView
 		card_container.add_child(card_view)
-		card_view.custom_minimum_size = Vector2(120, 160)
+		card_view.custom_minimum_size = Vector2(140, 180)
 		card_view.use_physics = false
 		card_view.setup(reward_card)
 		if not card_view.played.is_connected(_on_card_selected):

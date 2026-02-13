@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="RelicData" format=3 uid="uid://c7fqgjgepiago"]
+
+[ext_resource type="Script" uid="uid://2byr5g5sl7w2" path="res://Relic/RelicData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "vital_core"
+title = "Vital Core"
+description = "+20 Max HP."
+rarity = 1
+max_hp_bonus = 20
+card_id_filters = null

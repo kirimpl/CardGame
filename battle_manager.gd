@@ -1,5 +1,7 @@
 extends Node2D
 
+const RELIC_FALLBACK_ICON: Texture2D = preload("res://icon.svg")
+
 @export var player_scene: PackedScene
 @export var enemy_scene: PackedScene
 @export var starting_deck: Array[CardData] = []
@@ -67,6 +69,8 @@ var enchant_effect_durability: int = 0
 var pile_overlay: Control = null
 var pile_title_label: Label = null
 var pile_cards_grid: GridContainer = null
+var relic_panel: PanelContainer = null
+var relic_icons_row: HBoxContainer = null
 
 
 func _ready() -> void:
@@ -75,6 +79,7 @@ func _ready() -> void:
 
 	end_btn.pressed.connect(_on_end_turn_pressed)
 	_setup_pile_ui()
+	_setup_relic_panel()
 	_bind_pile_label_events()
 
 	if ui_speed_btn:
@@ -225,6 +230,7 @@ func _update_ui() -> void:
 
 	if ui_turn_label:
 		ui_turn_label.text = "Turn: %d" % turn_number
+	_refresh_relic_panel()
 
 
 func _assert_ui() -> bool:
@@ -293,6 +299,45 @@ func _setup_pile_ui() -> void:
 	vbox.add_child(close_btn)
 
 
+func _setup_relic_panel() -> void:
+	relic_panel = PanelContainer.new()
+	relic_panel.name = "RelicPanel"
+	relic_panel.anchor_left = 1.0
+	relic_panel.anchor_top = 0.0
+	relic_panel.anchor_right = 1.0
+	relic_panel.anchor_bottom = 0.0
+	relic_panel.offset_left = -330.0
+	relic_panel.offset_top = 50.0
+	relic_panel.offset_right = -10.0
+	relic_panel.offset_bottom = 98.0
+	relic_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui_root.add_child(relic_panel)
+
+	relic_icons_row = HBoxContainer.new()
+	relic_icons_row.alignment = BoxContainer.ALIGNMENT_END
+	relic_icons_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	relic_panel.add_child(relic_icons_row)
+
+	_refresh_relic_panel()
+
+
+func _refresh_relic_panel() -> void:
+	if relic_icons_row == null:
+		return
+	for child in relic_icons_row.get_children():
+		child.queue_free()
+
+	for relic in RunManager.relics:
+		if relic == null:
+			continue
+		var icon_holder := TextureRect.new()
+		icon_holder.custom_minimum_size = Vector2(34, 34)
+		icon_holder.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		icon_holder.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_holder.texture = relic.icon if relic.icon != null else RELIC_FALLBACK_ICON
+		icon_holder.tooltip_text = "%s\n%s" % [relic.get_display_name(), relic.description]
+		relic_icons_row.add_child(icon_holder)
+
 func _bind_pile_label_events() -> void:
 	_bind_clickable_label(ui_deck, _on_deck_label_gui_input)
 	_bind_clickable_label(ui_discard, _on_discard_label_gui_input)
@@ -335,7 +380,9 @@ func _duplicate_cards(cards: Array[CardData]) -> Array[CardData]:
 		if c == null:
 			continue
 		var copy: CardData = c.duplicate(true) as CardData
-		out.append(copy if copy != null else c)
+		var final_card: CardData = copy if copy != null else c
+		RunManager.apply_relic_card_modifiers(final_card)
+		out.append(final_card)
 	return out
 
 
@@ -562,6 +609,9 @@ func _on_enemy_hit_player(_target: Node) -> void:
 			player.call("play_take_damage")
 
 	if int(RunManager.current_hp) <= 0:
+		if RunManager.try_trigger_relic_revive():
+			_update_ui()
+			return
 		get_tree().change_scene_to_file("res://menu.tscn")
 		return
 
