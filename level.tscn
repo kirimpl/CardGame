@@ -316,6 +316,7 @@ position = Vector2(849, 619)
 
 [node name="Chest" type="Area2D" parent="." unique_id=79635831]
 script = ExtResource("10_aicyk")
+prompt_text = "Нажмите на у"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Chest" unique_id=257307204]
 position = Vector2(934, 617)

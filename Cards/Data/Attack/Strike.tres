@@ -8,5 +8,5 @@ id = "strike"
 title = "Strike"
 description = "Deal 6 damage."
 damage = 6
-rarity = 3
+rarity = 2
 metadata/_custom_type_script = "uid://be11khx8iq8gm"

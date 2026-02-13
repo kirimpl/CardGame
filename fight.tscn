@@ -17,6 +17,8 @@
 [ext_resource type="Script" uid="uid://djn1peikqaqw3" path="res://hand.gd" id="13_a4egk"]
 [ext_resource type="Resource" uid="uid://bpxcpd6edc3u1" path="res://Cards/Data/Attack/FireSlash.tres" id="13_fireslash"]
 [ext_resource type="Resource" path="res://Cards/Data/Buff/EnchantedSword.tres" id="14_enchanted"]
+[ext_resource type="Script" uid="uid://2byr5g5sl7w2" path="res://Relic/RelicData.gd" id="15_wcprl"]
+[ext_resource type="Resource" uid="uid://ckg15us7uerf5" path="res://Relic/Data/WarBanner.tres" id="16_fwncr"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_topbar"]
 bg_color = Color(0.08, 0.09, 0.1, 0.75)
@@ -353,6 +355,7 @@ script = ExtResource("2_m6wut")
 player_scene = ExtResource("3_hchht")
 enemy_scene = ExtResource("4_34m47")
 starting_deck = Array[ExtResource("10_i4q7v")]([ExtResource("11_a4egk"), ExtResource("14_enchanted"), ExtResource("12_he0cp"), ExtResource("13_fireslash")])
+starting_relics = Array[ExtResource("15_wcprl")]([ExtResource("16_fwncr")])
 card_view_scene = ExtResource("12_8o1o4")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=300959845]

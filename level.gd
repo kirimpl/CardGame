@@ -18,8 +18,15 @@ var enemy: Node = null
 
 var relic_panel: PanelContainer = null
 var relic_icons_row: HBoxContainer = null
+var relic_tooltip: PanelContainer = null
+var relic_tooltip_title: Label = null
+var relic_tooltip_desc: Label = null
+var relic_signature_cached: String = ""
 
 func _ready() -> void:
+	RunManager.bootstrap_starting_relics_from_fight_scene()
+	RunManager.apply_starting_relics()
+
 	# Синхронизируем HP
 	if player and ("hp" in player):
 		RunManager.current_hp = int(player.hp)
@@ -152,19 +159,43 @@ func _setup_relic_panel() -> void:
 	relic_panel.offset_top = 8.0
 	relic_panel.offset_right = -8.0
 	relic_panel.offset_bottom = 56.0
-	relic_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	relic_panel.mouse_filter = Control.MOUSE_FILTER_PASS
 	hud.add_child(relic_panel)
 
 	relic_icons_row = HBoxContainer.new()
 	relic_icons_row.alignment = BoxContainer.ALIGNMENT_END
-	relic_icons_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	relic_icons_row.mouse_filter = Control.MOUSE_FILTER_PASS
 	relic_panel.add_child(relic_icons_row)
+
+	relic_tooltip = PanelContainer.new()
+	relic_tooltip.name = "RelicTooltip"
+	relic_tooltip.visible = false
+	relic_tooltip.custom_minimum_size = Vector2(260, 90)
+	relic_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	relic_tooltip.z_index = 20
+	hud.add_child(relic_tooltip)
+
+	var tooltip_vbox := VBoxContainer.new()
+	relic_tooltip.add_child(tooltip_vbox)
+
+	relic_tooltip_title = Label.new()
+	relic_tooltip_title.add_theme_font_size_override("font_size", 16)
+	tooltip_vbox.add_child(relic_tooltip_title)
+
+	relic_tooltip_desc = Label.new()
+	relic_tooltip_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tooltip_vbox.add_child(relic_tooltip_desc)
 	_refresh_relic_panel()
 
 
 func _refresh_relic_panel() -> void:
 	if relic_icons_row == null:
 		return
+	var new_signature: String = _build_relic_signature()
+	if new_signature == relic_signature_cached:
+		return
+	relic_signature_cached = new_signature
+
 	for child in relic_icons_row.get_children():
 		child.queue_free()
 
@@ -175,6 +206,38 @@ func _refresh_relic_panel() -> void:
 		icon_holder.custom_minimum_size = Vector2(34, 34)
 		icon_holder.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 		icon_holder.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_holder.mouse_filter = Control.MOUSE_FILTER_STOP
+		icon_holder.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		icon_holder.texture = relic.icon if relic.icon != null else RELIC_FALLBACK_ICON
-		icon_holder.tooltip_text = "%s\n%s" % [relic.get_display_name(), relic.description]
+		icon_holder.mouse_entered.connect(_on_relic_icon_mouse_entered.bind(icon_holder, relic))
+		icon_holder.mouse_exited.connect(_on_relic_icon_mouse_exited)
 		relic_icons_row.add_child(icon_holder)
+	if relic_tooltip:
+		relic_tooltip.visible = false
+
+
+func _build_relic_signature() -> String:
+	if RunManager.relics.is_empty():
+		return "-"
+	var parts: PackedStringArray = []
+	for relic in RunManager.relics:
+		if relic == null:
+			continue
+		parts.append(relic.id + "|" + relic.get_display_name())
+	return "||".join(parts)
+
+
+func _on_relic_icon_mouse_entered(icon: TextureRect, relic: RelicData) -> void:
+	if relic_tooltip == null or relic_tooltip_title == null or relic_tooltip_desc == null:
+		return
+	relic_tooltip_title.text = relic.get_display_name()
+	relic_tooltip_desc.text = relic.description
+	var size_hint: Vector2 = relic_tooltip.get_combined_minimum_size()
+	var p: Vector2 = icon.global_position + Vector2(-size_hint.x - 10.0, 8.0)
+	relic_tooltip.global_position = p
+	relic_tooltip.visible = true
+
+
+func _on_relic_icon_mouse_exited() -> void:
+	if relic_tooltip:
+		relic_tooltip.visible = false

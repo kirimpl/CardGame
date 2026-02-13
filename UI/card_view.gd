@@ -18,6 +18,7 @@ var card_data: CardData
 @export var icon_defense: Texture2D
 @export var icon_buff: Texture2D
 @export var rarity_common_frame: Texture2D = preload("res://Cards/RarityRam/Common.tres")
+@export var rarity_uncommon_frame: Texture2D = preload("res://Cards/RarityRam/uncommon.tres")
 @export var rarity_rare_frame: Texture2D = preload("res://Cards/RarityRam/Rare.tres")
 @export var rarity_legendary_frame: Texture2D = preload("res://Cards/RarityRam/Legendary.tres")
 
@@ -108,7 +109,7 @@ func _update_rarity_frame() -> void:
 		CardData.Rarity.RARE:
 			rarity_frame.texture = rarity_rare_frame
 		CardData.Rarity.UNCOMMON:
-			rarity_frame.texture = rarity_rare_frame
+			rarity_frame.texture = rarity_uncommon_frame
 		_:
 			rarity_frame.texture = rarity_common_frame
 

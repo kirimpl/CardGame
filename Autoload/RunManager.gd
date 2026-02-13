@@ -130,8 +130,8 @@ func start_new_run():
 	deck.clear()
 	relics.clear()
 	consumed_one_shot_relic_indices.clear()
-	for relic in starting_relics:
-		add_relic(relic, false)
+	bootstrap_starting_relics_from_fight_scene()
+	apply_starting_relics()
 
 	
 func next_floor():
@@ -247,3 +247,36 @@ func has_relic_id(relic_id: String) -> bool:
 		if relic.id == relic_id:
 			return true
 	return false
+
+
+func apply_starting_relics() -> void:
+	for relic in starting_relics:
+		add_relic(relic, false)
+
+
+func bootstrap_starting_relics_from_fight_scene() -> void:
+	# Allow configuring starting relics in BattleManager inspector (fight.tscn),
+	# while still applying them from the beginning of Level.
+	if not starting_relics.is_empty():
+		return
+
+	var fight_scene: PackedScene = load("res://fight.tscn") as PackedScene
+	if fight_scene == null:
+		return
+	var fight_root: Node = fight_scene.instantiate()
+	if fight_root == null:
+		return
+
+	var battle_manager_node: Node = fight_root.get_node_or_null("BattleManager")
+	if battle_manager_node == null:
+		fight_root.queue_free()
+		return
+
+	var bm_relics_variant: Variant = battle_manager_node.get("starting_relics")
+	if bm_relics_variant is Array:
+		var bm_relics: Array = bm_relics_variant
+		for relic_variant in bm_relics:
+			if relic_variant is RelicData:
+				starting_relics.append(relic_variant as RelicData)
+
+	fight_root.queue_free()
