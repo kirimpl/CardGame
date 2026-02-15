@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "purge_mind"
+title = "Purge Mind"
+description = "Exhaust 1 random card from your hand. Draw 1 card."
+cost = 1
+rarity = 1
+cards_to_draw = 1
+cards_to_exhaust_random = 1
+upgraded_description = "Exhaust 1 random card from your hand. Draw 2 cards."
+upgraded_cards_to_draw = 2

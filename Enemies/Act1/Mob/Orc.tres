@@ -4,6 +4,7 @@
 [ext_resource type="SpriteFrames" uid="uid://nn8ru85fyia3" path="res://Enemies/Act1/Mob/Animation/Orc.tres" id="2"]
 [ext_resource type="Resource" path="res://Enemies/Act1/Mob/Effects/OrcBleedDebuff.tres" id="3_bleed"]
 [ext_resource type="Resource" path="res://Enemies/Act1/Mob/Effects/OrcArmorBreakDebuff.tres" id="4_armor_break"]
+[ext_resource type="Resource" path="res://Enemies/Act1/Mob/Effects/OrcWeakDebuff.tres" id="5_weak"]
 
 [resource]
 script = ExtResource("1")
@@ -17,4 +18,4 @@ base_damage = 7
 min_gold = 15
 max_gold = 26
 battle_actions = Array[int]([0, 1, 2, 3])
-debuff_effects_on_player = Array[Resource]([ExtResource("3_bleed"), ExtResource("4_armor_break")])
+debuff_effects_on_player = Array[Resource]([ExtResource("3_bleed"), ExtResource("4_armor_break"), ExtResource("5_weak")])

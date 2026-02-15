@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "tactical_gamble"
+title = "Tactical Gamble"
+description = "Discard 1 random card. Draw 2 cards."
+cost = 0
+rarity = 1
+cards_to_draw = 2
+cards_to_discard_random = 1
+upgraded_description = "Discard 1 random card. Draw 3 cards."
+upgraded_cards_to_draw = 3

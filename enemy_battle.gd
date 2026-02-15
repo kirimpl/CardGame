@@ -3,6 +3,7 @@ const EnemyAppliedEffectRes = preload("res://Enemies/EnemyAppliedEffect.gd")
 
 signal hit_player(target: Node)
 signal apply_player_effects(payloads: Array)
+signal damage_taken(amount: int)
 signal turn_finished
 signal died
 
@@ -138,6 +139,7 @@ func _tick_effects_for_phase(phase: EffectData.TickWhen) -> void:
 				dot = max(0, int(eff.value) * max(1, stacks))
 			if dot > 0:
 				hp = max(0, hp - dot)
+				emit_signal("damage_taken", dot)
 				if hp > 0:
 					await play_hit_anim()
 				else:
@@ -417,6 +419,8 @@ func take_damage(amount: int) -> void:
 		dealt -= absorbed
 
 	hp = max(0, hp - dealt)
+	if dealt > 0:
+		emit_signal("damage_taken", dealt)
 	if hp <= 0:
 		await play_death()
 	elif dealt > 0:

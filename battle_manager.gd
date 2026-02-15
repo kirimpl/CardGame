@@ -17,6 +17,9 @@ const RELIC_FALLBACK_ICON: Texture2D = preload("res://icon.svg")
 @export var default_enchant_effect_durability: int = 1
 @export var default_enchant_charges: int = 2
 @export var enemy_spacing: float = 160.0
+@export var target_pick_radius: float = 240.0
+@export var damage_popup_duration: float = 0.5
+@export var damage_popup_rise: float = 38.0
 
 @onready var player_anchor: Marker2D = $"../PlayerAnchor"
 @onready var enemy_anchor: Marker2D = $"../EnemyAnchor"
@@ -67,6 +70,8 @@ var enchant_attack_charges: int = 0
 var enchant_effect: EffectData = null
 var enchant_effect_durability: int = 0
 var player_effects: Dictionary = {}
+var pending_target_card: CardData = null
+var target_preview_enemy: Node2D = null
 
 var pile_overlay: Control = null
 var pile_title_label: Label = null
@@ -156,6 +161,10 @@ func _spawn_combatants() -> void:
 			var cb_effects: Callable = Callable(self, "_on_enemy_apply_player_effects")
 			if not enemy_instance.apply_player_effects.is_connected(cb_effects):
 				enemy_instance.apply_player_effects.connect(cb_effects)
+		if enemy_instance.has_signal("damage_taken"):
+			var cb_damage: Callable = Callable(self, "_on_enemy_damage_taken").bind(enemy_instance)
+			if not enemy_instance.damage_taken.is_connected(cb_damage):
+				enemy_instance.damage_taken.connect(cb_damage)
 
 	if RunManager.current_enemy_data == null:
 		push_error("BattleManager: no enemy data")
@@ -250,7 +259,10 @@ func _update_ui() -> void:
 					p = "Debuff"
 			if p != "":
 				intent_parts.append(p)
-		ui_enemy_intent.text = "Intent: %s" % " | ".join(intent_parts)
+		if pending_target_card != null:
+			ui_enemy_intent.text = "Choose target for: %s (RMB cancel)" % pending_target_card.get_display_title()
+		else:
+			ui_enemy_intent.text = "Intent: %s" % " | ".join(intent_parts)
 
 		if focus_enemy.has_method("get_effect_details"):
 			var effs: Dictionary = focus_enemy.get_effect_details()
@@ -590,7 +602,8 @@ func _start_player_turn_setup() -> void:
 	turn_number = player_turns_started
 	energy = energy_max
 	player_defense = 0
-	_tick_player_effects(EffectData.TickWhen.START_TURN)
+	if _tick_player_effects(EffectData.TickWhen.START_TURN):
+		return
 	_update_energy_ui()
 	_update_ui()
 	await _draw_cards(hand_size)
@@ -649,12 +662,18 @@ func _update_energy_ui() -> void:
 func _on_card_played(card: CardData) -> void:
 	if busy or not player_turn:
 		return
+	if not card.is_playable():
+		return
 	if energy < card.get_cost():
 		return
-	await _play_card(card)
+	if _should_request_target(card):
+		pending_target_card = card
+		_set_target_prompt()
+		return
+	await _play_card(card, null)
 
 
-func _play_card(card: CardData) -> void:
+func _play_card(card: CardData, forced_target: Node2D = null) -> void:
 	busy = true
 	_set_buttons_enabled(false)
 
@@ -669,7 +688,8 @@ func _play_card(card: CardData) -> void:
 	_update_energy_ui()
 
 	if card_defense > 0:
-		player_defense += card_defense
+		var defense_mult: float = _get_player_block_multiplier()
+		player_defense += int(round(float(card_defense) * defense_mult))
 
 	if card.get_card_type() == CardData.CardType.BUFF and card.buff_kind == CardData.BuffKind.ENCHANT_ATTACK_EFFECT:
 		var charges: int = max(1, card_buff_charges if card_buff_charges > 0 else default_enchant_charges)
@@ -693,7 +713,7 @@ func _play_card(card: CardData) -> void:
 	if card.get_hits_all_enemies():
 		targets = _get_alive_enemies()
 	else:
-		var single_target: Node2D = _get_primary_enemy()
+		var single_target: Node2D = forced_target if forced_target != null else _get_primary_enemy()
 		if single_target != null:
 			targets.append(single_target)
 
@@ -704,10 +724,13 @@ func _play_card(card: CardData) -> void:
 				await player.call("attack_sequence", targets[0])
 
 			var dmg_bonus: int = _get_player_effect_value("strength_surge")
+			var outgoing_mult: float = _get_player_outgoing_damage_multiplier()
 			for t in targets:
 				if not is_instance_valid(t) or not t.has_method("take_damage"):
 					continue
-				t.take_damage(card_damage + dmg_bonus)
+				var base_damage: int = card_damage + dmg_bonus
+				var final_damage: int = max(0, int(round(float(base_damage) * outgoing_mult)))
+				t.take_damage(final_damage)
 				if card.has_method("has_effect") and card.has_effect() and t.has_method("apply_effect") and card_effect != null:
 					var eff_dur: int = card.get_effect_durability()
 					if eff_dur > 0:
@@ -732,6 +755,8 @@ func _play_card(card: CardData) -> void:
 	else:
 		discard_pile.append(card)
 
+	await _apply_post_play_manipulation(card)
+
 	_refresh_hand_ui()
 	_update_deck_ui()
 	_update_ui()
@@ -742,6 +767,28 @@ func _play_card(card: CardData) -> void:
 
 	busy = false
 	_set_buttons_enabled(true)
+
+
+func _apply_post_play_manipulation(card: CardData) -> void:
+	var discard_count: int = card.get_cards_to_discard_random()
+	for _i in range(discard_count):
+		if hand.is_empty():
+			break
+		var idx_discard: int = randi_range(0, hand.size() - 1)
+		discard_pile.append(hand[idx_discard])
+		hand.remove_at(idx_discard)
+
+	var exhaust_count: int = card.get_cards_to_exhaust_random()
+	for _i in range(exhaust_count):
+		if hand.is_empty():
+			break
+		var idx_exhaust: int = randi_range(0, hand.size() - 1)
+		exhaust_pile.append(hand[idx_exhaust])
+		hand.remove_at(idx_exhaust)
+
+	var draw_count: int = card.get_cards_to_draw()
+	if draw_count > 0:
+		await _draw_cards(draw_count)
 
 
 func _on_enemy_dead() -> void:
@@ -779,6 +826,8 @@ func _dash_to(actor: Node2D, target_pos: Vector2) -> void:
 func _on_end_turn_pressed() -> void:
 	if busy or not player_turn:
 		return
+	pending_target_card = null
+	target_preview_enemy = null
 	for card in hand:
 		discard_pile.append(card)
 	hand.clear()
@@ -787,7 +836,8 @@ func _on_end_turn_pressed() -> void:
 	_set_buttons_enabled(false)
 
 	await _tick_end_turn_effects()
-	_tick_player_effects(EffectData.TickWhen.END_TURN)
+	if _tick_player_effects(EffectData.TickWhen.END_TURN):
+		return
 	_update_ui()
 	if _all_enemies_dead():
 		_on_enemy_dead()
@@ -805,8 +855,17 @@ func _tick_end_turn_effects() -> void:
 
 func _on_enemy_hit_player(_target: Node, source_enemy: Node2D) -> void:
 	var dmg: int = 0
-	if is_instance_valid(source_enemy) and "damage" in source_enemy:
-		dmg = int(source_enemy.damage)
+	if is_instance_valid(source_enemy):
+		if source_enemy.has_method("get_effective_attack_damage"):
+			dmg = int(source_enemy.get_effective_attack_damage())
+		elif "damage" in source_enemy:
+			dmg = int(source_enemy.damage)
+
+	if _roll_player_miss_taken():
+		dmg = 0
+
+	var incoming_mult: float = _get_player_incoming_damage_multiplier()
+	dmg = max(0, int(round(float(dmg) * incoming_mult)))
 
 	var taken: int = max(0, dmg - player_defense)
 	player_defense = max(0, player_defense - dmg)
@@ -817,6 +876,7 @@ func _on_enemy_hit_player(_target: Node, source_enemy: Node2D) -> void:
 		source_enemy.take_damage(reflect)
 	if taken > 0:
 		RunManager.current_hp = max(0, int(RunManager.current_hp) - taken)
+		_spawn_damage_popup(_get_player_popup_position(), taken, true)
 		if is_instance_valid(player) and player.has_method("play_take_damage"):
 			player.call("play_take_damage")
 
@@ -827,6 +887,177 @@ func _on_enemy_hit_player(_target: Node, source_enemy: Node2D) -> void:
 		get_tree().change_scene_to_file("res://menu.tscn")
 		return
 	_update_ui()
+
+
+func _input(event: InputEvent) -> void:
+	if pending_target_card == null:
+		return
+	if not (event is InputEventMouseButton):
+		return
+	var mb: InputEventMouseButton = event as InputEventMouseButton
+	if not mb.pressed:
+		return
+	if mb.button_index == MOUSE_BUTTON_RIGHT:
+		pending_target_card = null
+		target_preview_enemy = null
+		_update_ui()
+		get_viewport().set_input_as_handled()
+		return
+	if mb.button_index != MOUSE_BUTTON_LEFT:
+		return
+	var picked: Node2D = _pick_enemy_from_screen_pos(mb.position)
+	if picked == null:
+		return
+	var card_to_play: CardData = pending_target_card
+	pending_target_card = null
+	target_preview_enemy = null
+	_update_ui()
+	get_viewport().set_input_as_handled()
+	await _play_card(card_to_play, picked)
+
+
+func _should_request_target(card: CardData) -> bool:
+	if card == null:
+		return false
+	if card.get_hits_all_enemies():
+		return false
+	if _get_alive_enemies().size() <= 1:
+		return false
+	return card.requires_target_selection()
+
+
+func _set_target_prompt() -> void:
+	if ui_enemy_intent != null and pending_target_card != null:
+		ui_enemy_intent.text = "Choose target for: %s (RMB cancel)" % pending_target_card.get_display_title()
+
+
+func _pick_enemy_from_screen_pos(_screen_pos: Vector2) -> Node2D:
+	var best: Node2D = null
+	var best_dist: float = 999999.0
+	var mouse_world: Vector2 = get_global_mouse_position()
+	for e in _get_alive_enemies():
+		if not is_instance_valid(e):
+			continue
+		var pick_pos: Vector2 = _get_enemy_pick_position(e)
+		var d: float = pick_pos.distance_to(mouse_world)
+		if d < best_dist:
+			best_dist = d
+			best = e
+	if best_dist <= maxf(80.0, target_pick_radius):
+		return best
+	return null
+
+
+func _get_enemy_pick_position(enemy_instance: Node2D) -> Vector2:
+	if enemy_instance == null:
+		return Vector2.ZERO
+	var sprite: Node = enemy_instance.get_node_or_null("AnimatedSprite2D")
+	if sprite != null and sprite is Node2D:
+		return (sprite as Node2D).global_position
+	return enemy_instance.global_position
+
+
+func _process(_delta: float) -> void:
+	_refresh_target_highlight()
+
+
+func _refresh_target_highlight() -> void:
+	if pending_target_card == null:
+		_clear_target_highlight()
+		return
+	var hovered: Node2D = _pick_enemy_from_screen_pos(Vector2.ZERO)
+	target_preview_enemy = hovered
+	for e in _get_alive_enemies():
+		if not is_instance_valid(e):
+			continue
+		if e == hovered:
+			e.modulate = Color(1.25, 1.25, 0.8, 1.0)
+		else:
+			e.modulate = Color(0.9, 0.9, 0.9, 1.0)
+
+
+func _clear_target_highlight() -> void:
+	if target_preview_enemy == null and pending_target_card == null:
+		return
+	target_preview_enemy = null
+	for e in enemies:
+		if is_instance_valid(e):
+			e.modulate = Color.WHITE
+
+
+func _get_player_popup_position() -> Vector2:
+	if is_instance_valid(player):
+		return player.global_position + Vector2(0.0, -72.0)
+	return player_anchor.global_position + Vector2(0.0, -72.0)
+
+
+func _spawn_damage_popup(world_pos: Vector2, value: int, is_damage: bool) -> void:
+	var popup: Label = Label.new()
+	popup.text = str(value)
+	popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	popup.add_theme_font_size_override("font_size", 28)
+	var screen_pos: Vector2 = get_viewport().get_canvas_transform() * world_pos
+	popup.position = screen_pos + Vector2(randf_range(-18.0, 18.0), 0.0)
+	popup.z_index = 200
+	popup.modulate = Color(1.0, 0.25, 0.25, 1.0) if is_damage else Color(0.35, 1.0, 0.45, 1.0)
+	ui_root.add_child(popup)
+
+	var tween: Tween = popup.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(popup, "position:y", popup.position.y - damage_popup_rise, damage_popup_duration)
+	tween.tween_property(popup, "modulate:a", 0.0, damage_popup_duration)
+	tween.finished.connect(popup.queue_free)
+
+
+func _roll_player_miss_taken() -> bool:
+	var miss: int = _get_player_miss_chance_percent()
+	if miss <= 0:
+		return false
+	return randi_range(1, 100) <= clampi(miss, 0, 95)
+
+
+func _get_player_miss_chance_percent() -> int:
+	var total: int = 0
+	for id in player_effects.keys():
+		var e: Dictionary = player_effects[id]
+		var eff: EffectData = e.get("data") as EffectData
+		if eff == null:
+			continue
+		total += max(0, eff.miss_chance_percent)
+	return total
+
+
+func _get_player_incoming_damage_multiplier() -> float:
+	var mult: float = 1.0
+	for id in player_effects.keys():
+		var e: Dictionary = player_effects[id]
+		var eff: EffectData = e.get("data") as EffectData
+		if eff == null:
+			continue
+		mult *= eff.incoming_damage_multiplier
+	return maxf(0.0, mult)
+
+
+func _get_player_outgoing_damage_multiplier() -> float:
+	var mult: float = 1.0
+	for id in player_effects.keys():
+		var e: Dictionary = player_effects[id]
+		var eff: EffectData = e.get("data") as EffectData
+		if eff == null:
+			continue
+		mult *= eff.outgoing_damage_multiplier
+	return maxf(0.0, mult)
+
+
+func _get_player_block_multiplier() -> float:
+	var mult: float = 1.0
+	for id in player_effects.keys():
+		var e: Dictionary = player_effects[id]
+		var eff: EffectData = e.get("data") as EffectData
+		if eff == null:
+			continue
+		mult *= eff.block_gain_multiplier
+	return maxf(0.0, mult)
 
 
 func _on_enemy_apply_player_effects(payloads: Array) -> void:
@@ -840,6 +1071,13 @@ func _on_enemy_apply_player_effects(payloads: Array) -> void:
 		var dur: int = int(payload.get("duration", 1))
 		var stacks: int = int(payload.get("stacks", 1))
 		_apply_player_effect(effect, max(1, dur), max(1, stacks))
+
+
+func _on_enemy_damage_taken(amount: int, source_enemy: Node2D) -> void:
+	if amount <= 0:
+		return
+	var pos: Vector2 = _get_enemy_pick_position(source_enemy) + Vector2(0.0, -64.0)
+	_spawn_damage_popup(pos, amount, true)
 
 
 func _enemy_action() -> void:
@@ -958,7 +1196,7 @@ func _apply_player_effect(effect: EffectData, durability: int, stacks: int = 1) 
 	player_effects[id] = e
 
 
-func _tick_player_effects(phase: EffectData.TickWhen) -> void:
+func _tick_player_effects(phase: EffectData.TickWhen) -> bool:
 	var to_remove: Array[String] = []
 	for id in player_effects.keys():
 		var e: Dictionary = player_effects[id]
@@ -968,6 +1206,24 @@ func _tick_player_effects(phase: EffectData.TickWhen) -> void:
 			continue
 		if eff.tick_when != phase:
 			continue
+
+		if eff.is_damage_over_time:
+			var stacks: int = int(e.get("stacks", 1))
+			var dot: int = 0
+			if eff.is_percent_of_current_hp_dot:
+				dot = int(round(float(RunManager.current_hp) * (float(eff.value) / 100.0)))
+			else:
+				dot = max(0, int(eff.value) * max(1, stacks))
+			if dot > 0:
+				RunManager.current_hp = max(0, int(RunManager.current_hp) - dot)
+				_spawn_damage_popup(_get_player_popup_position(), dot, true)
+				if int(RunManager.current_hp) <= 0:
+					if RunManager.try_trigger_relic_revive():
+						_update_ui()
+					else:
+						get_tree().change_scene_to_file("res://menu.tscn")
+					return true
+
 		var dur: int = int(e.get("dur", 0))
 		if dur > 0:
 			dur -= 1
@@ -977,6 +1233,7 @@ func _tick_player_effects(phase: EffectData.TickWhen) -> void:
 				to_remove.append(id)
 	for rid in to_remove:
 		player_effects.erase(rid)
+	return false
 
 
 func _refresh_player_effects_ui() -> void:

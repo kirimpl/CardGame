@@ -57,6 +57,14 @@ func _update_visuals() -> void:
 
 	if desc_label:
 		var d: String = card_data.get_description()
+		if not card_data.is_playable():
+			d += "\nUnplayable"
+		if card_data.get_cards_to_draw() > 0:
+			d += "\nDraw %d" % card_data.get_cards_to_draw()
+		if card_data.get_cards_to_discard_random() > 0:
+			d += "\nDiscard %d random" % card_data.get_cards_to_discard_random()
+		if card_data.get_cards_to_exhaust_random() > 0:
+			d += "\nExhaust %d random" % card_data.get_cards_to_exhaust_random()
 		if card_data.has_effect():
 			var eff_id: String = card_data.get_effect_id()
 			var eff_data: EffectData = card_data.get_effect()
@@ -133,6 +141,8 @@ func _on_mouse_exited() -> void:
 
 func _gui_input(event) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if card_data != null and not card_data.is_playable():
+			return
 		emit_signal("played")
 
 func _play_reward_hover_anim(hovered: bool) -> void:

@@ -31,6 +31,16 @@ enum Rarity { COMMON, UNCOMMON, RARE, LEGENDARY }
 
 @export_group("Targeting")
 @export var hits_all_enemies: bool = false
+@export var target_required: bool = false
+
+@export_group("Draw/Manipulation")
+@export var cards_to_draw: int = 0
+@export var cards_to_discard_random: int = 0
+@export var cards_to_exhaust_random: int = 0
+
+@export_group("Curse")
+@export var is_curse: bool = false
+@export var playable: bool = true
 
 @export_group("Upgrade Constructor")
 @export var upgraded: bool = false
@@ -41,6 +51,9 @@ enum Rarity { COMMON, UNCOMMON, RARE, LEGENDARY }
 @export var upgraded_effect_durability: int = -1
 @export var upgraded_buff_charges: int = -1
 @export var upgraded_buff_effect_durability: int = -1
+@export var upgraded_cards_to_draw: int = -1
+@export var upgraded_cards_to_discard_random: int = -1
+@export var upgraded_cards_to_exhaust_random: int = -1
 @export var use_upgraded_exhaust_override: bool = false
 @export var upgraded_exhaust: bool = false
 @export var auto_upgrade_tuning: bool = true
@@ -196,3 +209,33 @@ func get_rarity_name() -> String:
 
 func get_hits_all_enemies() -> bool:
 	return hits_all_enemies
+
+
+func requires_target_selection() -> bool:
+	if hits_all_enemies:
+		return false
+	if target_required:
+		return true
+	return get_damage() > 0 or has_effect()
+
+
+func get_cards_to_draw() -> int:
+	if upgraded and upgraded_cards_to_draw >= 0:
+		return max(0, upgraded_cards_to_draw)
+	return max(0, cards_to_draw)
+
+
+func get_cards_to_discard_random() -> int:
+	if upgraded and upgraded_cards_to_discard_random >= 0:
+		return max(0, upgraded_cards_to_discard_random)
+	return max(0, cards_to_discard_random)
+
+
+func get_cards_to_exhaust_random() -> int:
+	if upgraded and upgraded_cards_to_exhaust_random >= 0:
+		return max(0, upgraded_cards_to_exhaust_random)
+	return max(0, cards_to_exhaust_random)
+
+
+func is_playable() -> bool:
+	return playable and not is_curse

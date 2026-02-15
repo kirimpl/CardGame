@@ -8,10 +8,14 @@ var is_rest_room: bool = false
 var active_station_id: String = ""
 var campfire_used: bool = false
 var popup_mode: String = ""
+var active_event_room: bool = false
 
 @export var enemy_overworld_scene: PackedScene = preload("res://Mob/EnemyOverworld.tscn")
 @export var card_view_scene: PackedScene = preload("res://UI/CardView.tscn")
 @export var rest_config: RestConfig = preload("res://Rest/Data/DefaultRestConfig.tres")
+@export_range(0.0, 1.0, 0.01) var event_room_chance_early: float = 0.08
+@export_range(0.0, 1.0, 0.01) var event_room_chance_mid: float = 0.18
+@export_range(0.0, 1.0, 0.01) var event_room_chance_late: float = 0.14
 
 @onready var mobs_root: Node2D = $Mobs
 @onready var enemy_spawn: Node2D = $Mobs/EnemySpawn
@@ -71,6 +75,14 @@ func _ready() -> void:
 
 
 func _setup_battle_state() -> void:
+	active_event_room = false
+	if _try_start_event_room():
+		active_event_room = true
+		chest.hide()
+		chest.monitoring = false
+		portal.show()
+		portal.monitoring = true
+		return
 	_spawn_random_enemy()
 	chest.hide()
 	chest.monitoring = false
@@ -213,6 +225,176 @@ func _change_scene_safe() -> void:
 func _on_portal_body_entered(body: Node2D) -> void:
 	if body.is_in_group("Player") or body.name == "Player":
 		RunManager.next_floor()
+
+
+func _try_start_event_room() -> bool:
+	if RunManager.current_floor <= 1:
+		return false
+	var chance: float = _get_event_room_chance_for_floor(RunManager.current_floor)
+	if randf() >= chance:
+		return false
+	var roll: int = randi_range(0, 2)
+	match roll:
+		0:
+			_open_event_forgotten_shrine()
+		1:
+			_open_event_cursed_totem()
+		_:
+			_open_event_traveling_sage()
+	return true
+
+
+func _get_event_room_chance_for_floor(floor: int) -> float:
+	if floor <= 3:
+		return event_room_chance_early
+	if floor <= 7:
+		return event_room_chance_mid
+	return event_room_chance_late
+
+
+func _open_event_forgotten_shrine() -> void:
+	_show_popup_shell("Event: Forgotten Shrine")
+	var info: Label = Label.new()
+	info.text = "A ruined shrine hums with old power."
+	popup_body.add_child(info)
+	_add_event_choice("Offer Blood (-10 HP, gain Rare card)", Callable(self, "_event_shrine_offer_blood"))
+	_add_event_choice("Pray (remove 1 Curse from deck)", Callable(self, "_event_shrine_cleanse"))
+	_add_event_choice("Leave", Callable(self, "_close_popup"))
+
+
+func _event_shrine_offer_blood() -> void:
+	RunManager.current_hp = max(1, RunManager.current_hp - 10)
+	var card: CardData = _pick_reward_card_by_rarity(CardData.Rarity.RARE)
+	if card != null:
+		RunManager.deck.append(card)
+	_show_popup_notice("You gained power from blood.")
+
+
+func _event_shrine_cleanse() -> void:
+	var removed: bool = _remove_one_curse_from_deck()
+	_show_popup_notice("Curse removed." if removed else "No curses to remove.")
+
+
+func _open_event_cursed_totem() -> void:
+	_show_popup_shell("Event: Cursed Totem")
+	var info: Label = Label.new()
+	info.text = "A totem offers strength at a cost."
+	popup_body.add_child(info)
+	_add_event_choice("Accept (gain relic, add curse)", Callable(self, "_event_totem_accept"))
+	_add_event_choice("Ignore", Callable(self, "_close_popup"))
+
+
+func _event_totem_accept() -> void:
+	var relic: RelicData = _pick_random_relic_reward()
+	if relic != null:
+		RunManager.add_relic(relic)
+	_add_random_curse_to_deck()
+	_show_popup_notice("You took the totem's bargain.")
+
+
+func _open_event_traveling_sage() -> void:
+	_show_popup_shell("Event: Traveling Sage")
+	var info: Label = Label.new()
+	info.text = "A sage offers to train your deck."
+	popup_body.add_child(info)
+	_add_event_choice("Pay 40 gold: upgrade random card", Callable(self, "_event_sage_upgrade"))
+	_add_event_choice("Pay 20 gold: remove 1 curse", Callable(self, "_event_sage_cleanse"))
+	_add_event_choice("Decline", Callable(self, "_close_popup"))
+
+
+func _event_sage_upgrade() -> void:
+	if RunManager.gold < 40:
+		_show_popup_notice("Not enough gold.")
+		return
+	RunManager.gold -= 40
+	var upgraded: bool = _upgrade_random_non_upgraded_card()
+	_show_popup_notice("A card was upgraded." if upgraded else "No upgradable cards.")
+
+
+func _event_sage_cleanse() -> void:
+	if RunManager.gold < 20:
+		_show_popup_notice("Not enough gold.")
+		return
+	RunManager.gold -= 20
+	var removed: bool = _remove_one_curse_from_deck()
+	_show_popup_notice("Curse removed." if removed else "No curses to remove.")
+
+
+func _add_event_choice(text: String, cb: Callable) -> void:
+	var btn: Button = Button.new()
+	btn.text = text
+	btn.pressed.connect(cb)
+	popup_body.add_child(btn)
+
+
+func _pick_reward_card_by_rarity(rarity: CardData.Rarity) -> CardData:
+	var candidates: Array[CardData] = []
+	for c in RunManager.get_available_card_pool():
+		if c == null:
+			continue
+		if not c.can_appear_in_rewards:
+			continue
+		if c.rarity != rarity:
+			continue
+		candidates.append(c)
+	if candidates.is_empty():
+		return null
+	var chosen: CardData = candidates.pick_random() as CardData
+	if chosen == null:
+		return null
+	var copy: CardData = chosen.duplicate(true) as CardData
+	return copy if copy != null else chosen
+
+
+func _pick_random_relic_reward() -> RelicData:
+	var candidates: Array[RelicData] = []
+	for relic in RunManager.get_available_relic_pool():
+		if relic == null:
+			continue
+		if relic.id != "" and RunManager.has_relic_id(relic.id):
+			continue
+		candidates.append(relic)
+	if candidates.is_empty():
+		return null
+	return candidates.pick_random() as RelicData
+
+
+func _add_random_curse_to_deck() -> void:
+	var paths: PackedStringArray = PackedStringArray([
+		"res://Cards/Data/Curse/Doubt.tres",
+		"res://Cards/Data/Curse/Regret.tres",
+	])
+	var picked_path: String = paths[randi_range(0, paths.size() - 1)]
+	var res: Resource = load(picked_path)
+	if res is CardData:
+		var card_template: CardData = res as CardData
+		var copy: CardData = card_template.duplicate(true) as CardData
+		RunManager.deck.append(copy if copy != null else card_template)
+
+
+func _remove_one_curse_from_deck() -> bool:
+	for i in range(RunManager.deck.size()):
+		var c: CardData = RunManager.deck[i]
+		if c != null and c.is_curse:
+			RunManager.deck.remove_at(i)
+			return true
+	return false
+
+
+func _upgrade_random_non_upgraded_card() -> bool:
+	var candidates: Array[int] = []
+	for i in range(RunManager.deck.size()):
+		var c: CardData = RunManager.deck[i]
+		if c == null:
+			continue
+		if c.is_upgraded():
+			continue
+		candidates.append(i)
+	if candidates.is_empty():
+		return false
+	var idx: int = candidates.pick_random()
+	RunManager.deck[idx].set_upgraded(true)
+	return true
 
 
 func _on_chest_opened() -> void:

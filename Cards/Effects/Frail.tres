@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="EffectData" format=3]
+
+[ext_resource type="Script" path="res://Cards/EffectData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "frail"
+title = "Frail"
+description = "Target gains 25% less block."
+stackable = false
+block_gain_multiplier = 0.75

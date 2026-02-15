@@ -31,4 +31,5 @@ enum TickWhen { END_TURN, START_TURN }
 @export var miss_chance_percent: int = 0
 @export_range(0.0, 3.0, 0.01) var incoming_damage_multiplier: float = 1.0
 @export_range(0.0, 3.0, 0.01) var outgoing_damage_multiplier: float = 1.0
+@export_range(0.0, 3.0, 0.01) var block_gain_multiplier: float = 1.0
 @export var skip_turn_charges: int = 0
