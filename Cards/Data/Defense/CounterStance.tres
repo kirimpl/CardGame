@@ -6,8 +6,8 @@
 script = ExtResource("1")
 id = "counter_stance"
 title = "Counter Stance"
-description = "Deal 4 damage. Gain 5 block."
+description = "Deal 3 damage. Gain 5 block."
 cost = 1
-damage = 4
+damage = 3
 defense = 5
 rarity = 1

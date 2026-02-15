@@ -4,22 +4,22 @@ extends Node
 @export var start_floor: int = 1
 @export var start_act: int = 1
 @export var start_gold: int = 0
-@export var base_max_hp: int = 96
+@export var base_max_hp: int = 88
 @export_range(1, 20, 1) var battle_speed_min: int = 1
 @export_range(1, 20, 1) var battle_speed_max: int = 5
 @export_range(1, 100, 1) var floors_per_act: int = 9
 @export_range(1, 100, 1) var boss_floor: int = 10
-@export_range(0.0, 1.0, 0.01) var elite_chance: float = 0.24
+@export_range(0.0, 1.0, 0.01) var elite_chance: float = 0.20
 @export_range(1.0, 5.0, 0.05) var elite_gold_multiplier: float = 1.65
-@export_range(0.0, 1.0, 0.01) var multi_enemy_chance: float = 0.4
+@export_range(0.0, 1.0, 0.01) var multi_enemy_chance: float = 0.35
 @export_range(2, 4, 1) var multi_enemy_max_count: int = 2
 @export var starting_relics: Array[RelicData] = []
 @export var guaranteed_rest_floors: PackedInt32Array = PackedInt32Array([5, 9])
 @export_file("*.tscn") var level_scene_path: String = "res://level.tscn"
 @export_file("*.tscn") var rest_room_scene_path: String = "res://level.tscn"
-@export_range(0.0, 1.0, 0.01) var campfire_heal_percent: float = 0.4
-@export_range(1.0, 3.0, 0.05) var night_enemy_hp_multiplier: float = 1.25
-@export_range(1.0, 3.0, 0.05) var night_enemy_damage_multiplier: float = 1.2
+@export_range(0.0, 1.0, 0.01) var campfire_heal_percent: float = 0.35
+@export_range(1.0, 3.0, 0.05) var night_enemy_hp_multiplier: float = 1.20
+@export_range(1.0, 3.0, 0.05) var night_enemy_damage_multiplier: float = 1.15
 
 var current_floor: int = 1
 var current_act: int = 1
@@ -36,6 +36,7 @@ var deck: Array[CardData] = []
 var relics: Array[RelicData] = []
 var consumed_one_shot_relic_indices: Dictionary = {}
 var used_smith_free_upgrades: int = 0
+var merchant_purge_count: int = 0
 var is_night: bool = false
 
 var normal_enemies: Array[EnemyData] = []
@@ -215,6 +216,7 @@ func start_new_run() -> void:
 	relics.clear()
 	consumed_one_shot_relic_indices.clear()
 	used_smith_free_upgrades = 0
+	merchant_purge_count = 0
 	bootstrap_starting_relics_from_fight_scene()
 	apply_starting_relics()
 
@@ -243,6 +245,8 @@ func get_scene_for_floor(floor: int) -> String:
 
 
 func get_enemy_difficulty() -> String:
+	if current_floor <= 2:
+		return "NORMAL"
 	if current_floor == boss_floor:
 		return "BOSS"
 	if randf() < elite_chance:
@@ -328,6 +332,15 @@ func get_smith_upgrade_price_preview(base_price: int) -> int:
 func apply_merchant_discount(base_price: int) -> int:
 	var discount: float = get_merchant_discount_percent()
 	return max(1, int(round(float(base_price) * (1.0 - discount))))
+
+
+func get_merchant_purge_price(base_price: int, increment: int) -> int:
+	var raw_price: int = max(0, base_price + (merchant_purge_count * max(0, increment)))
+	return apply_merchant_discount(raw_price)
+
+
+func consume_merchant_purge() -> void:
+	merchant_purge_count += 1
 
 
 func add_relic(relic: RelicData, heal_to_full_on_add: bool = false) -> void:

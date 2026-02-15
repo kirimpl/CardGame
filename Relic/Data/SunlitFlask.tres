@@ -6,6 +6,6 @@
 script = ExtResource("1")
 id = "sunlit_flask"
 title = "Sunlit Flask"
-description = "Campfire restores +20% max HP."
+description = "Campfire restores +15% max HP."
 rarity = 1
-campfire_heal_bonus_percent = 0.2
+campfire_heal_bonus_percent = 0.15

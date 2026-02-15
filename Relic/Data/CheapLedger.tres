@@ -4,8 +4,9 @@
 
 [resource]
 script = ExtResource("1")
-id = "tempered_tongs"
-title = "Tempered Tongs"
-description = "Smith upgrade cost is reduced by 25%."
+id = "cheap_ledger"
+title = "Cheap Ledger"
+description = "Merchant prices -12% and Smith prices -10%."
 rarity = 1
-smith_discount_percent = 0.25
+merchant_discount_percent = 0.12
+smith_discount_percent = 0.1

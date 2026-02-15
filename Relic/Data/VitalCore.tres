@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "vital_core"
 title = "Vital Core"
-description = "+20 Max HP."
+description = "+14 Max HP."
 rarity = 1
-max_hp_bonus = 20
+max_hp_bonus = 14
 card_id_filters = null

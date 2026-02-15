@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RelicData" format=3]
+
+[ext_resource type="Script" path="res://Relic/RelicData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "cracking_chisel"
+title = "Cracking Chisel"
+description = "Shatter Armor gets +1 damage and +1 effect duration."
+rarity = 0
+card_id_filters = PackedStringArray("shatter_armor")
+attack_damage_bonus = 1
+effect_durability_bonus = 1

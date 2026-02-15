@@ -7,9 +7,9 @@
 script = ExtResource("1")
 id = "parry_stance"
 title = "Parry Stance"
-description = "Gain Parry for 2 turns."
+description = "Gain Parry for 1 turn."
 cost = 1
 rarity = 1
 buff_kind = 2
 buff_effect = ExtResource("2")
-buff_effect_durability = 2
+buff_effect_durability = 1

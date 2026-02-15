@@ -7,8 +7,8 @@
 script = ExtResource("1")
 id = "fire_slash"
 title = "Fire Slash"
-description = "Deal 6 damage. Apply Burn (2 turns)."
-damage = 6
+description = "Deal 5 damage. Apply Burn (2 turns)."
+damage = 5
 effect = ExtResource("2")
 effect_durability = 2
 rarity = 1

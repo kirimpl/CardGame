@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "twin_cut"
 title = "Twin Cut"
-description = "Deal 8 damage."
+description = "Deal 7 damage."
 cost = 1
-damage = 8
-rarity = 0
+damage = 7
+rarity = 1

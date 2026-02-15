@@ -83,6 +83,8 @@ var ui_player_status_row: HBoxContainer = null
 var status_tooltip: PanelContainer = null
 var status_tooltip_title: Label = null
 var status_tooltip_desc: Label = null
+var enemy_status_signature: String = ""
+var player_status_signature: String = ""
 
 
 func _ready() -> void:
@@ -150,6 +152,10 @@ func _spawn_combatants() -> void:
 			var cb: Callable = Callable(self, "_on_enemy_hit_player").bind(enemy_instance)
 			if not enemy_instance.hit_player.is_connected(cb):
 				enemy_instance.hit_player.connect(cb)
+		if enemy_instance.has_signal("apply_player_effects"):
+			var cb_effects: Callable = Callable(self, "_on_enemy_apply_player_effects")
+			if not enemy_instance.apply_player_effects.is_connected(cb_effects):
+				enemy_instance.apply_player_effects.connect(cb_effects)
 
 	if RunManager.current_enemy_data == null:
 		push_error("BattleManager: no enemy data")
@@ -240,28 +246,33 @@ func _update_ui() -> void:
 					p = "DEF +5"
 				EnemyData.Intent.BUFF:
 					p = "BUFF"
+				EnemyData.Intent.DEBUFF:
+					p = "Debuff"
 			if p != "":
 				intent_parts.append(p)
 		ui_enemy_intent.text = "Intent: %s" % " | ".join(intent_parts)
 
-		for c in ui_enemy_status.get_children():
-			c.queue_free()
-		if status_tooltip != null:
-			status_tooltip.visible = false
 		if focus_enemy.has_method("get_effect_details"):
 			var effs: Dictionary = focus_enemy.get_effect_details()
-			for k in effs.keys():
-				var d: Dictionary = effs[k]
-				var stacks: int = int(d.get("stacks", 1))
-				var dur: int = int(d.get("duration", 0))
-				var title: String = str(d.get("title", k))
-				var desc: String = str(d.get("description", ""))
-				var l: Label = Label.new()
-				l.text = "%s x%d" % [title, stacks]
-				if dur > 0:
-					l.text += " (%d)" % dur
-				_bind_status_tooltip(l, title, desc)
-				ui_enemy_status.add_child(l)
+			var sig: String = _build_effect_signature(effs)
+			if sig != enemy_status_signature:
+				enemy_status_signature = sig
+				for c in ui_enemy_status.get_children():
+					c.queue_free()
+				if status_tooltip != null:
+					status_tooltip.visible = false
+				for k in effs.keys():
+					var d: Dictionary = effs[k]
+					var stacks: int = int(d.get("stacks", 1))
+					var dur: int = int(d.get("duration", 0))
+					var title: String = str(d.get("title", k))
+					var desc: String = str(d.get("description", ""))
+					var l: Label = Label.new()
+					l.text = "%s x%d" % [title, stacks]
+					if dur > 0:
+						l.text += " (%d)" % dur
+					_bind_status_tooltip(l, title, desc)
+					ui_enemy_status.add_child(l)
 	else:
 		ui_enemy_hp.text = "No Enemies"
 		ui_enemy_intent.text = ""
@@ -269,6 +280,7 @@ func _update_ui() -> void:
 		ui_enemy_bar_text.text = "HP 0/0"
 		for c in ui_enemy_status.get_children():
 			c.queue_free()
+		enemy_status_signature = ""
 
 	if player != null and player.has_method("toggle_shield"):
 		player.toggle_shield(player_defense > 0)
@@ -427,7 +439,7 @@ func _bind_status_tooltip(label: Label, title: String, desc: String) -> void:
 		return
 	label.mouse_filter = Control.MOUSE_FILTER_STOP
 	label.mouse_default_cursor_shape = Control.CURSOR_HELP
-	var cb_enter: Callable = Callable(self, "_on_status_label_mouse_entered").bind(title, desc)
+	var cb_enter: Callable = Callable(self, "_on_status_label_mouse_entered").bind(label, title, desc)
 	var cb_exit: Callable = Callable(self, "_on_status_label_mouse_exited")
 	if not label.mouse_entered.is_connected(cb_enter):
 		label.mouse_entered.connect(cb_enter)
@@ -435,14 +447,18 @@ func _bind_status_tooltip(label: Label, title: String, desc: String) -> void:
 		label.mouse_exited.connect(cb_exit)
 
 
-func _on_status_label_mouse_entered(title: String, desc: String) -> void:
+func _on_status_label_mouse_entered(label: Label, title: String, desc: String) -> void:
 	if status_tooltip == null or status_tooltip_title == null or status_tooltip_desc == null:
 		return
 	status_tooltip_title.text = title
 	status_tooltip_desc.text = desc
-	var mouse_pos: Vector2 = get_viewport().get_mouse_position()
-	status_tooltip.global_position = mouse_pos + Vector2(16.0, 12.0)
 	status_tooltip.visible = true
+	var tip_size: Vector2 = status_tooltip.get_combined_minimum_size()
+	var vp_size: Vector2 = get_viewport_rect().size
+	var p: Vector2 = label.global_position + Vector2(0.0, -tip_size.y - 8.0)
+	p.x = clampf(p.x, 4.0, maxf(4.0, vp_size.x - tip_size.x - 4.0))
+	p.y = clampf(p.y, 4.0, maxf(4.0, vp_size.y - tip_size.y - 4.0))
+	status_tooltip.global_position = p
 
 
 func _on_status_label_mouse_exited() -> void:
@@ -811,6 +827,19 @@ func _on_enemy_hit_player(_target: Node, source_enemy: Node2D) -> void:
 	_update_ui()
 
 
+func _on_enemy_apply_player_effects(payloads: Array) -> void:
+	for payload_any in payloads:
+		if typeof(payload_any) != TYPE_DICTIONARY:
+			continue
+		var payload: Dictionary = payload_any
+		var effect: EffectData = payload.get("effect") as EffectData
+		if effect == null:
+			continue
+		var dur: int = int(payload.get("duration", 1))
+		var stacks: int = int(payload.get("stacks", 1))
+		_apply_player_effect(effect, max(1, dur), max(1, stacks))
+
+
 func _enemy_action() -> void:
 	var alive: Array[Node2D] = _get_alive_enemies()
 	if alive.is_empty():
@@ -951,24 +980,28 @@ func _tick_player_effects(phase: EffectData.TickWhen) -> void:
 func _refresh_player_effects_ui() -> void:
 	if ui_player_status_row == null:
 		return
+	var sig: String = _build_effect_signature(_build_player_effect_details())
+	if sig == player_status_signature:
+		return
+	player_status_signature = sig
 	for c in ui_player_status_row.get_children():
 		c.queue_free()
 	if status_tooltip != null:
 		status_tooltip.visible = false
-	for id in player_effects.keys():
-		var e: Dictionary = player_effects[id]
-		var eff: EffectData = e.get("data") as EffectData
-		if eff == null:
-			continue
+	var details: Dictionary = _build_player_effect_details()
+	for id in details.keys():
+		var d: Dictionary = details[id]
 		var l: Label = Label.new()
-		var stacks: int = int(e.get("stacks", 1))
-		var dur: int = int(e.get("dur", 0))
-		l.text = "%s" % (eff.title if eff.title != "" else id)
+		var stacks: int = int(d.get("stacks", 1))
+		var dur: int = int(d.get("duration", 0))
+		var title: String = str(d.get("title", id))
+		var desc: String = str(d.get("description", ""))
+		l.text = "%s" % title
 		if stacks > 1:
 			l.text += " x%d" % stacks
 		if dur > 0:
 			l.text += " (%d)" % dur
-		_bind_status_tooltip(l, eff.title, eff.description)
+		_bind_status_tooltip(l, title, desc)
 		ui_player_status_row.add_child(l)
 
 
@@ -980,6 +1013,34 @@ func _get_player_effect_value(effect_id: String) -> int:
 	if eff == null:
 		return 0
 	return eff.value
+
+
+func _build_player_effect_details() -> Dictionary:
+	var out: Dictionary = {}
+	for id in player_effects.keys():
+		var e: Dictionary = player_effects[id]
+		var eff: EffectData = e.get("data") as EffectData
+		if eff == null:
+			continue
+		out[id] = {
+			"title": eff.title if eff.title != "" else id,
+			"description": eff.description,
+			"stacks": int(e.get("stacks", 1)),
+			"duration": int(e.get("dur", 0)),
+		}
+	return out
+
+
+func _build_effect_signature(details: Dictionary) -> String:
+	if details.is_empty():
+		return "-"
+	var keys: Array = details.keys()
+	keys.sort()
+	var parts: PackedStringArray = []
+	for k in keys:
+		var d: Dictionary = details[k]
+		parts.append("%s|%s|%s" % [str(k), str(d.get("stacks", 0)), str(d.get("duration", 0))])
+	return "||".join(parts)
 
 
 func _exit_tree() -> void:

@@ -4,8 +4,8 @@
 
 [resource]
 script = ExtResource("1")
-id = "tempered_tongs"
-title = "Tempered Tongs"
-description = "Smith upgrade cost is reduced by 25%."
-rarity = 1
-smith_discount_percent = 0.25
+id = "field_rations"
+title = "Field Rations"
+description = "On pickup, heal 14 HP."
+rarity = 0
+heal_on_pickup_flat = 14

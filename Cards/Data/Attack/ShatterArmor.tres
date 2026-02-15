@@ -7,8 +7,8 @@
 script = ExtResource("1")
 id = "shatter_armor"
 title = "Shatter Armor"
-description = "Deal 5 damage. Apply Armor Break."
-damage = 5
+description = "Deal 4 damage. Apply Armor Break."
+damage = 4
 effect = ExtResource("2")
 effect_durability = 2
 rarity = 1

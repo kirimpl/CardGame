@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "iron_wall"
 title = "Iron Wall"
-description = "Gain 15 block."
+description = "Gain 14 block."
 cost = 2
-defense = 15
+defense = 14
 rarity = 1

@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="RelicData" format=3]
+
+[ext_resource type="Script" path="res://Relic/RelicData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "oil_catalyst"
+title = "Oil Catalyst"
+description = "Enchanted Sword, Flame Oil and Inferno Edge gain +1 buff charge."
+rarity = 1
+card_id_filters = PackedStringArray("enchanted_sword", "flame_oil", "inferno_edge")
+buff_charges_bonus = 1

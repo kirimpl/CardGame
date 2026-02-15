@@ -290,7 +290,13 @@ func _roll_merchant_offers() -> void:
 	if not merchant_card_offers.is_empty() or not merchant_relic_offers.is_empty():
 		return
 
-	var card_pool: Array[CardData] = RunManager.get_available_card_pool().duplicate()
+	var card_pool: Array[CardData] = []
+	for pool_card in RunManager.get_available_card_pool():
+		if pool_card == null:
+			continue
+		if not pool_card.can_appear_in_merchant:
+			continue
+		card_pool.append(pool_card)
 	var used_card_ids: Dictionary = {}
 	while merchant_card_offers.size() < rest_config.merchant_card_offer_count and not card_pool.is_empty():
 		var picked: CardData = card_pool.pick_random() as CardData
@@ -354,8 +360,12 @@ func _open_merchant_popup() -> void:
 	_show_popup_shell("Merchant")
 
 	var discount_pct: float = RunManager.get_merchant_discount_percent() * 100.0
+	var purge_price: int = RunManager.get_merchant_purge_price(
+		rest_config.merchant_purge_price_base,
+		rest_config.merchant_purge_price_increment
+	)
 	var gold_info: Label = Label.new()
-	gold_info.text = "Gold: %d   |   Merchant discount: %.0f%%" % [int(RunManager.gold), discount_pct]
+	gold_info.text = "Gold: %d   |   Merchant discount: %.0f%%   |   Purge: %d" % [int(RunManager.gold), discount_pct, purge_price]
 	popup_body.add_child(gold_info)
 
 	var card_header: Label = Label.new()
@@ -430,6 +440,43 @@ func _open_merchant_popup() -> void:
 		buy_btn.pressed.connect(_on_buy_merchant_relic.bind(i))
 		row.add_child(buy_btn)
 
+	var purge_header: Label = Label.new()
+	purge_header.text = "Remove Card From Deck"
+	purge_header.add_theme_font_size_override("font_size", 18)
+	popup_body.add_child(purge_header)
+
+	var purge_hint: Label = Label.new()
+	purge_hint.text = "Cost: %d (base 50, +25 each time). Minimum deck size is 1." % purge_price
+	popup_body.add_child(purge_hint)
+
+	var purge_grid: HFlowContainer = HFlowContainer.new()
+	purge_grid.add_theme_constant_override("h_separation", 12)
+	purge_grid.add_theme_constant_override("v_separation", 10)
+	popup_body.add_child(purge_grid)
+
+	for i in range(RunManager.deck.size()):
+		var deck_card: CardData = RunManager.deck[i]
+		if deck_card == null:
+			continue
+
+		var purge_col: VBoxContainer = VBoxContainer.new()
+		purge_col.custom_minimum_size = Vector2(146.0, 260.0)
+		purge_grid.add_child(purge_col)
+
+		var purge_card_view: CardView = card_view_scene.instantiate() as CardView
+		if purge_card_view != null:
+			purge_card_view.use_physics = false
+			purge_card_view.custom_minimum_size = Vector2(140.0, 190.0)
+			purge_card_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			purge_card_view.setup(deck_card)
+			purge_col.add_child(purge_card_view)
+
+		var purge_btn: Button = Button.new()
+		purge_btn.text = "Remove (%d)" % purge_price
+		purge_btn.disabled = RunManager.deck.size() <= 1 or RunManager.gold < purge_price
+		purge_btn.pressed.connect(_on_purge_merchant_card.bind(i))
+		purge_col.add_child(purge_btn)
+
 
 func _on_buy_merchant_card(index: int) -> void:
 	if index < 0 or index >= merchant_card_offers.size():
@@ -477,6 +524,26 @@ func _on_buy_merchant_relic(index: int) -> void:
 	RunManager.add_relic(relic)
 	offer["bought"] = true
 	merchant_relic_offers[index] = offer
+	_update_hud()
+	_open_merchant_popup()
+
+
+func _on_purge_merchant_card(deck_index: int) -> void:
+	if deck_index < 0 or deck_index >= RunManager.deck.size():
+		return
+	if RunManager.deck.size() <= 1:
+		return
+
+	var price: int = RunManager.get_merchant_purge_price(
+		rest_config.merchant_purge_price_base,
+		rest_config.merchant_purge_price_increment
+	)
+	if RunManager.gold < price:
+		return
+
+	RunManager.gold -= price
+	RunManager.deck.remove_at(deck_index)
+	RunManager.consume_merchant_purge()
 	_update_hud()
 	_open_merchant_popup()
 

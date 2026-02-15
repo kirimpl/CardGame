@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "quick_slash"
 title = "Quick Slash"
-description = "Deal 4 damage."
+description = "Deal 3 damage."
 cost = 0
-damage = 4
+damage = 3
 rarity = 0

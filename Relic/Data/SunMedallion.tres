@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RelicData" format=3]
+
+[ext_resource type="Script" path="res://Relic/RelicData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "sun_medallion"
+title = "Sun Medallion"
+description = "At day only: defense cards gain +2 block."
+rarity = 1
+active_time = 1
+card_id_filters = PackedStringArray()
+use_card_type_filter = true
+card_type_filter = 1
+defense_bonus = 2

@@ -1,6 +1,8 @@
 extends Node2D
+const EnemyAppliedEffectRes = preload("res://Enemies/EnemyAppliedEffect.gd")
 
 signal hit_player(target: Node)
+signal apply_player_effects(payloads: Array)
 signal turn_finished
 signal died
 
@@ -19,13 +21,15 @@ const DEFAULT_EFFECT_PATHS: Dictionary = {
 }
 
 @export_group("Combat")
-@export var floor_hp_scale: int = 3
+@export var floor_hp_scale: int = 4
 @export var floor_damage_scale: int = 1
 @export var elite_hp_multiplier: float = 1.5
 @export var elite_damage_multiplier: float = 1.35
 @export var defend_amount: int = 5
 @export var buff_damage_amount: int = 2
 @export var attack_lunge_offset: Vector2 = Vector2(60, 0)
+@export var night_debuff_chance_bonus_percent: int = 10
+@export var night_debuff_duration_bonus: int = 1
 
 @export_group("Animation Settings")
 @export var hit_frame: int = 2
@@ -97,6 +101,9 @@ func _update_intent_visual() -> void:
 		EnemyData.Intent.BUFF:
 			intent_label.text = "!"
 			intent_label.modulate = Color.GREEN
+		EnemyData.Intent.DEBUFF:
+			intent_label.text = "Debuff"
+			intent_label.modulate = Color(0.82, 0.48, 1.0)
 
 
 func tick_end_turn_effects() -> void:
@@ -130,7 +137,7 @@ func _tick_effects_for_phase(phase: EffectData.TickWhen) -> void:
 					await play_death()
 					return
 
-		if dur > 0:
+		if eff.tick_when == phase and dur > 0:
 			dur -= 1
 			e["dur"] = dur
 			effects[id] = e
@@ -167,6 +174,8 @@ func execute_turn(player_target: Node2D) -> void:
 			await _defend_sequence()
 		EnemyData.Intent.BUFF:
 			await _buff_sequence()
+		EnemyData.Intent.DEBUFF:
+			await _debuff_sequence(player_target)
 
 	roll_intent()
 	busy = false
@@ -236,6 +245,7 @@ func _defend_sequence() -> void:
 	t.tween_property(self, "modulate", Color.WHITE, 0.2)
 	await t.finished
 	current_defense += defend_amount
+	_apply_configured_effects_to_self(data.defend_effects_on_self if data != null else [])
 
 
 func _buff_sequence() -> void:
@@ -244,6 +254,57 @@ func _buff_sequence() -> void:
 	t.tween_property(self, "scale", scale * 1.2, 0.2)
 	t.tween_property(self, "scale", scale, 0.2)
 	await t.finished
+	_apply_configured_effects_to_self(data.buff_effects_on_self if data != null else [])
+
+
+func _debuff_sequence(_target: Node2D) -> void:
+	_play_anim("Idle")
+	var t: Tween = create_tween()
+	t.tween_property(self, "modulate", Color(0.75, 0.45, 1.0, 1.0), 0.15)
+	t.tween_property(self, "modulate", Color.WHITE, 0.15)
+	await t.finished
+	var payloads: Array[Dictionary] = _build_effect_payloads(data.debuff_effects_on_player if data != null else [])
+	if RunManager.is_night and not payloads.is_empty():
+		for i in range(payloads.size()):
+			var payload: Dictionary = payloads[i]
+			payload["duration"] = int(payload.get("duration", 1)) + max(0, night_debuff_duration_bonus)
+			payloads[i] = payload
+	if not payloads.is_empty():
+		emit_signal("apply_player_effects", payloads)
+
+
+func _build_effect_payloads(configs: Array[EnemyAppliedEffectRes]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for cfg in configs:
+		if cfg == null:
+			continue
+		var effect: EffectData = cfg.effect as EffectData
+		if effect == null or effect.id == "":
+			continue
+		var roll: int = randi_range(1, 100)
+		var chance: int = clampi(int(cfg.chance_percent), 0, 100)
+		if RunManager.is_night:
+			chance = clampi(chance + max(0, night_debuff_chance_bonus_percent), 0, 100)
+		if roll > chance:
+			continue
+		out.append({
+			"effect": effect,
+			"duration": max(1, int(cfg.duration)),
+			"stacks": max(1, int(cfg.stacks)),
+		})
+	return out
+
+
+func _apply_configured_effects_to_self(configs: Array[EnemyAppliedEffectRes]) -> void:
+	var payloads: Array[Dictionary] = _build_effect_payloads(configs)
+	for payload in payloads:
+		var effect: EffectData = payload.get("effect") as EffectData
+		if effect == null:
+			continue
+		var duration: int = int(payload.get("duration", 1))
+		var stacks: int = int(payload.get("stacks", 1))
+		for _i in range(max(1, stacks)):
+			apply_effect(effect, max(1, duration))
 
 
 func apply_effect(effect_or_id: Variant, durability: int) -> void:

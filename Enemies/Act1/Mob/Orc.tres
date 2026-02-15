@@ -1,7 +1,9 @@
-[gd_resource type="Resource" script_class="EnemyData" format=3]
+[gd_resource type="Resource" script_class="EnemyData" format=3 uid="uid://3b7ywyvdvfmb"]
 
-[ext_resource type="Script" path="res://Enemies/EnemyData.gd" id="1"]
-[ext_resource type="SpriteFrames" path="res://Enemies/Act1/Mob/Animation/Orc.tres" id="2"]
+[ext_resource type="Script" uid="uid://btajr457idtm4" path="res://Enemies/EnemyData.gd" id="1"]
+[ext_resource type="SpriteFrames" uid="uid://nn8ru85fyia3" path="res://Enemies/Act1/Mob/Animation/Orc.tres" id="2"]
+[ext_resource type="Resource" path="res://Enemies/Act1/Mob/Effects/OrcBleedDebuff.tres" id="3_bleed"]
+[ext_resource type="Resource" path="res://Enemies/Act1/Mob/Effects/OrcArmorBreakDebuff.tres" id="4_armor_break"]
 
 [resource]
 script = ExtResource("1")
@@ -14,5 +16,5 @@ base_hp = 26
 base_damage = 7
 min_gold = 15
 max_gold = 26
-battle_actions = Array[int]([0, 1, 2])
-
+battle_actions = Array[int]([0, 1, 2, 3])
+debuff_effects_on_player = Array[Resource]([ExtResource("3_bleed"), ExtResource("4_armor_break")])

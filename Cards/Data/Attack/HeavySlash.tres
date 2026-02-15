@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "heavy_slash"
 title = "Heavy Slash"
-description = "Deal 16 damage."
+description = "Deal 15 damage."
 cost = 2
-damage = 16
+damage = 15
 rarity = 1

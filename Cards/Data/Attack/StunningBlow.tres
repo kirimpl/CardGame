@@ -1,15 +1,15 @@
-[gd_resource type="Resource" script_class="CardData" format=3]
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://hg77der4laps"]
 
-[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Script" uid="uid://be11khx8iq8gm" path="res://Cards/CardData.gd" id="1"]
 [ext_resource type="Resource" path="res://Cards/Effects/Stun.tres" id="2"]
 
 [resource]
 script = ExtResource("1")
 id = "stunning_blow"
 title = "Stunning Blow"
-description = "Deal 3 damage and stun target."
-cost = 2
-damage = 3
+description = "Deal 2 damage and stun target."
+cost = 1
+damage = 2
 effect = ExtResource("2")
 effect_durability = 1
 rarity = 2

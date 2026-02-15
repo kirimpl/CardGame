@@ -16,5 +16,9 @@ class_name RestConfig
 @export var merchant_relic_price_rare: int = 300
 @export var merchant_relic_price_legendary: int = 420
 
+@export_group("Merchant Purge")
+@export var merchant_purge_price_base: int = 50
+@export var merchant_purge_price_increment: int = 25
+
 @export_group("Smith")
 @export var smith_upgrade_price: int = 90

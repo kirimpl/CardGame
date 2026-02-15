@@ -1,7 +1,8 @@
-[gd_resource type="Resource" script_class="EnemyData" format=3]
+[gd_resource type="Resource" script_class="EnemyData" format=3 uid="uid://btcybqagtb7pr"]
 
-[ext_resource type="Script" path="res://Enemies/EnemyData.gd" id="1"]
-[ext_resource type="SpriteFrames" path="res://Enemies/Act1/Mob/Animation/Mushroom.tres" id="2"]
+[ext_resource type="Script" uid="uid://btajr457idtm4" path="res://Enemies/EnemyData.gd" id="1"]
+[ext_resource type="SpriteFrames" uid="uid://t4ncku0wuo8p" path="res://Enemies/Act1/Mob/Animation/Mushroom.tres" id="2"]
+[ext_resource type="Resource" path="res://Enemies/Act1/Mob/Effects/MushroomPoisonDebuff.tres" id="3_poison"]
 
 [resource]
 script = ExtResource("1")
@@ -10,8 +11,7 @@ sprite_frames = ExtResource("2")
 overworld_offset = Vector2(0, -20)
 battle_offset = Vector2(0, -10)
 base_hp = 18
-base_damage = 5
 min_gold = 8
 max_gold = 14
-battle_actions = Array[int]([0, 1])
-
+battle_actions = Array[int]([0, 1, 3])
+debuff_effects_on_player = Array[Resource]([ExtResource("3_poison")])

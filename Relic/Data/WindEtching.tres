@@ -4,8 +4,9 @@
 
 [resource]
 script = ExtResource("1")
-id = "haggle_charm"
-title = "Haggle Charm"
-description = "Merchant prices are reduced by 20%."
+id = "wind_etching"
+title = "Wind Etching"
+description = "Whirlwind and Steel Rain cost 1 less."
 rarity = 2
-merchant_discount_percent = 0.2
+card_id_filters = PackedStringArray("whirlwind", "steel_rain")
+cost_delta = -1

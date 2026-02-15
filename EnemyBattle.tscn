@@ -18,8 +18,6 @@ shape = SubResource("CapsuleShape2D_r5v2j")
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=436522790]
 position = Vector2(-5.9604645e-08, -1.9073486e-06)
 scale = Vector2(1.328125, 1.328125)
-animation = &"Attack"
-autoplay = "Idle"
 
 [node name="Hitboxes" type="Node2D" parent="." unique_id=1671769227]
 

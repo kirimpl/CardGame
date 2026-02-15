@@ -4,8 +4,9 @@
 
 [resource]
 script = ExtResource("1")
-id = "tempered_tongs"
-title = "Tempered Tongs"
-description = "Smith upgrade cost is reduced by 25%."
+id = "hemostat_needle"
+title = "Hemostat Needle"
+description = "Steel Rain applies Bleed for +1 turn."
 rarity = 1
-smith_discount_percent = 0.25
+card_id_filters = PackedStringArray("steel_rain")
+effect_durability_bonus = 1

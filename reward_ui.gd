@@ -5,14 +5,14 @@ const RELIC_FALLBACK_ICON: Texture2D = preload("res://icon.svg")
 @export var all_cards_db: Array[CardData] = []
 @export var all_relics_db: Array[RelicData] = []
 @export var reward_count: int = 3
-@export_range(0.0, 1.0, 0.01) var normal_common_weight: float = 0.7
-@export_range(0.0, 1.0, 0.01) var normal_uncommon_weight: float = 0.25
-@export_range(0.0, 1.0, 0.01) var normal_rare_weight: float = 0.05
-@export_range(0.0, 1.0, 0.01) var elite_common_weight: float = 0.3
+@export_range(0.0, 1.0, 0.01) var normal_common_weight: float = 0.75
+@export_range(0.0, 1.0, 0.01) var normal_uncommon_weight: float = 0.22
+@export_range(0.0, 1.0, 0.01) var normal_rare_weight: float = 0.03
+@export_range(0.0, 1.0, 0.01) var elite_common_weight: float = 0.35
 @export_range(0.0, 1.0, 0.01) var elite_uncommon_weight: float = 0.45
-@export_range(0.0, 1.0, 0.01) var elite_rare_weight: float = 0.25
-@export_range(0.0, 1.0, 0.01) var normal_upgrade_chance: float = 0.12
-@export_range(0.0, 1.0, 0.01) var elite_upgrade_chance: float = 0.33
+@export_range(0.0, 1.0, 0.01) var elite_rare_weight: float = 0.20
+@export_range(0.0, 1.0, 0.01) var normal_upgrade_chance: float = 0.08
+@export_range(0.0, 1.0, 0.01) var elite_upgrade_chance: float = 0.22
 @export_range(0.0, 1.0, 0.01) var normal_relic_reward_chance: float = 0.3
 
 @onready var card_container: HBoxContainer = $VBoxContainer/HBoxContainer
@@ -129,6 +129,7 @@ func _generate_card_rewards() -> void:
 		child.queue_free()
 
 	var available_cards: Array[CardData] = all_cards_db.duplicate()
+	available_cards = _filter_reward_cards(available_cards)
 	var picked_ids: Dictionary = {}
 	var cards_created: int = 0
 
@@ -195,6 +196,17 @@ func _pick_card_of_rarity(pool: Array[CardData], rarity: CardData.Rarity) -> Car
 		return null
 
 	return filtered.pick_random() as CardData
+
+
+func _filter_reward_cards(source: Array[CardData]) -> Array[CardData]:
+	var out: Array[CardData] = []
+	for card in source:
+		if card == null:
+			continue
+		if not card.can_appear_in_rewards:
+			continue
+		out.append(card)
+	return out
 
 func _build_reward_card(template: CardData) -> CardData:
 	var card_copy: CardData = template.duplicate(true) as CardData

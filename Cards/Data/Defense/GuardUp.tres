@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "guard_up"
 title = "Guard Up"
-description = "Gain 9 block."
+description = "Gain 8 block."
 cost = 1
-defense = 9
+defense = 8
 rarity = 0
