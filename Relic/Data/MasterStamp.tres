@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="RelicData" format=3]
+
+[ext_resource type="Script" path="res://Relic/RelicData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "master_stamp"
+title = "Master Stamp"
+description = "Get 1 free Smith upgrade per run."
+rarity = 2
+smith_free_upgrades = 1

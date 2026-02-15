@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="EnemyData" format=3]
 
 [ext_resource type="Script" path="res://Enemies/EnemyData.gd" id="1"]
-[ext_resource type="SpriteFrames" path="res://Enemies/Mob/Animation/Orc.tres" id="2"]
+[ext_resource type="SpriteFrames" path="res://Enemies/Act1/Mob/Animation/Orc.tres" id="2"]
 
 [resource]
 script = ExtResource("1")
@@ -15,3 +15,4 @@ base_damage = 7
 min_gold = 15
 max_gold = 26
 battle_actions = Array[int]([0, 1, 2])
+

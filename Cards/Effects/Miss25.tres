@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="EffectData" format=3]
+
+[ext_resource type="Script" path="res://Cards/EffectData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "miss_25"
+title = "Smoke Veil"
+description = "Target has 25% chance to miss attacks."
+stackable = false
+miss_chance_percent = 25

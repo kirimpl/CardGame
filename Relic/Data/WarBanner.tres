@@ -8,6 +8,7 @@ id = "war_banner"
 title = "War Banner"
 description = "Attack cards get +2 damage."
 rarity = 2
+is_starter_relic = true
 card_id_filters = PackedStringArray()
 use_card_type_filter = true
 attack_damage_bonus = 2

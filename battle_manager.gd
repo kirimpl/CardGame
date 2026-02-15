@@ -16,11 +16,10 @@ const RELIC_FALLBACK_ICON: Texture2D = preload("res://icon.svg")
 @export var default_enchant_effect: EffectData = preload("res://Cards/Effects/Burn.tres")
 @export var default_enchant_effect_durability: int = 1
 @export var default_enchant_charges: int = 2
+@export var enemy_spacing: float = 160.0
 
 @onready var player_anchor: Marker2D = $"../PlayerAnchor"
 @onready var enemy_anchor: Marker2D = $"../EnemyAnchor"
-
-# UI - Player Bar (Stanza-like)
 @onready var ui_root: Node = $"../UI/HudRoot"
 
 @onready var ui_player_bar: Control = ui_root.get_node("PlayerBar")
@@ -49,7 +48,7 @@ const RELIC_FALLBACK_ICON: Texture2D = preload("res://icon.svg")
 @onready var ui_energy_orb_label: Label = ui_root.get_node_or_null("EnergyOrb/Value")
 
 var player: Node2D
-var enemy: Node2D
+var enemies: Array[Node2D] = []
 var player_turn: bool = true
 var busy: bool = false
 
@@ -67,15 +66,23 @@ var player_turns_started: int = 0
 var enchant_attack_charges: int = 0
 var enchant_effect: EffectData = null
 var enchant_effect_durability: int = 0
+var player_effects: Dictionary = {}
+
 var pile_overlay: Control = null
 var pile_title_label: Label = null
 var pile_cards_grid: GridContainer = null
+
 var relic_panel: PanelContainer = null
 var relic_icons_row: HBoxContainer = null
 var relic_tooltip: PanelContainer = null
 var relic_tooltip_title: Label = null
 var relic_tooltip_desc: Label = null
 var relic_signature_cached: String = ""
+var ui_time_label: Label = null
+var ui_player_status_row: HBoxContainer = null
+var status_tooltip: PanelContainer = null
+var status_tooltip_title: Label = null
+var status_tooltip_desc: Label = null
 
 
 func _ready() -> void:
@@ -85,9 +92,12 @@ func _ready() -> void:
 	end_btn.pressed.connect(_on_end_turn_pressed)
 	_setup_pile_ui()
 	_setup_relic_panel()
+	_setup_time_label()
+	_setup_player_status_row()
+	_setup_status_tooltip()
 	_bind_pile_label_events()
 
-	if ui_speed_btn:
+	if ui_speed_btn != null:
 		ui_speed_btn.pressed.connect(_on_speed_pressed)
 		ui_speed_btn.text = "x" + str(RunManager.battle_speed_mult)
 
@@ -101,7 +111,6 @@ func _ready() -> void:
 	_ensure_starting_relics()
 
 	_setup_deck()
-
 	_update_ui()
 	_update_energy_ui()
 	_update_deck_ui()
@@ -112,144 +121,176 @@ func _ready() -> void:
 
 
 func _spawn_combatants() -> void:
-	var root := get_tree().current_scene
-
+	var root: Node = get_tree().current_scene
 	player = player_scene.instantiate()
 	root.call_deferred("add_child", player)
 
-	enemy = enemy_scene.instantiate()
-	root.call_deferred("add_child", enemy)
+	var enemy_count: int = RunManager.get_fight_enemy_count()
+	for i in range(enemy_count):
+		var enemy_instance: Node2D = enemy_scene.instantiate()
+		root.call_deferred("add_child", enemy_instance)
+		enemies.append(enemy_instance)
 
 	await get_tree().process_frame
 
 	player.global_position = player_anchor.global_position
-	enemy.global_position = enemy_anchor.global_position
 	player.z_index = 10
-	enemy.z_index = 10
 	player.scale = player_spawn_scale
-	enemy.scale = enemy_spawn_scale
 
-	if RunManager.current_enemy_data:
-		enemy.setup(RunManager.current_enemy_data, RunManager.current_floor, RunManager.current_enemy_is_elite)
+	var total_width: float = enemy_spacing * float(max(0, enemies.size() - 1))
+	for i in range(enemies.size()):
+		var enemy_instance: Node2D = enemies[i]
+		var x_offset: float = (-total_width * 0.5) + (enemy_spacing * float(i))
+		enemy_instance.global_position = enemy_anchor.global_position + Vector2(x_offset, 0.0)
+		enemy_instance.z_index = 10
+		enemy_instance.scale = enemy_spawn_scale
+		if RunManager.current_enemy_data != null:
+			enemy_instance.setup(RunManager.current_enemy_data, RunManager.current_floor, RunManager.current_enemy_is_elite)
+		if enemy_instance.has_signal("hit_player"):
+			var cb: Callable = Callable(self, "_on_enemy_hit_player").bind(enemy_instance)
+			if not enemy_instance.hit_player.is_connected(cb):
+				enemy_instance.hit_player.connect(cb)
 
-		if enemy.has_signal("hit_player") and not enemy.hit_player.is_connected(_on_enemy_hit_player):
-			enemy.hit_player.connect(_on_enemy_hit_player)
-	else:
-		push_error("BattleManager: Нет данных о враге!")
+	if RunManager.current_enemy_data == null:
+		push_error("BattleManager: no enemy data")
+
+
+func _get_alive_enemies() -> Array[Node2D]:
+	var alive: Array[Node2D] = []
+	for enemy_instance in enemies:
+		if enemy_instance == null:
+			continue
+		if not is_instance_valid(enemy_instance):
+			continue
+		if "hp" in enemy_instance and int(enemy_instance.hp) <= 0:
+			continue
+		alive.append(enemy_instance)
+	return alive
+
+
+func _get_primary_enemy() -> Node2D:
+	var alive: Array[Node2D] = _get_alive_enemies()
+	if alive.is_empty():
+		return null
+	return alive[0]
+
+
+func _all_enemies_dead() -> bool:
+	return _get_alive_enemies().is_empty()
 
 
 func _update_ui() -> void:
-	if ui_gold:
+	if ui_gold != null:
 		ui_gold.text = "Gold: %d" % int(RunManager.gold)
 
-	# --- Player HP Bar ---
-	var p_hp := int(RunManager.current_hp)
-	var p_max := int(RunManager.max_hp)
-	var p_ratio := float(p_hp) / float(max(1, p_max))
-	
-	if ui_player_bar and ui_player_bar_fill and ui_player_bar_back:
+	var p_hp: int = int(RunManager.current_hp)
+	var p_max: int = int(RunManager.max_hp)
+	var p_ratio: float = float(p_hp) / float(max(1, p_max))
+	if ui_player_bar_fill != null and ui_player_bar_back != null:
 		ui_player_bar_fill.size.x = ui_player_bar.size.x * p_ratio
 		ui_player_bar_back.size = ui_player_bar.size
-		# STS Color logic
 		if player_defense > 0:
-			ui_player_bar_back.color = Color(0.08, 0.12, 0.35, 1) # Dark Blue
-			ui_player_bar_fill.color = Color(0.15, 0.35, 0.85, 1) # Blue
-			ui_player_bar_text.text = "🛡 %d   HP %d/%d" % [player_defense, p_hp, p_max]
+			ui_player_bar_back.color = Color(0.08, 0.12, 0.35, 1)
+			ui_player_bar_fill.color = Color(0.15, 0.35, 0.85, 1)
+			ui_player_bar_text.text = "Block %d   HP %d/%d" % [player_defense, p_hp, p_max]
 		else:
-			ui_player_bar_back.color = Color(0.35, 0.1, 0.1, 1) # Dark Red
-			ui_player_bar_fill.color = Color(0.8, 0.2, 0.2, 1) # Red
+			ui_player_bar_back.color = Color(0.35, 0.1, 0.1, 1)
+			ui_player_bar_fill.color = Color(0.8, 0.2, 0.2, 1)
 			ui_player_bar_text.text = "HP %d/%d" % [p_hp, p_max]
 
-	# --- Enemy HP Bar ---
-	if enemy and "hp" in enemy:
-		var e_name := "Enemy"
-		if "data" in enemy and enemy.data:
-			e_name = enemy.data.name
+	var focus_enemy: Node2D = _get_primary_enemy()
+	if focus_enemy != null:
+		var e_name: String = "Enemy"
+		if "data" in focus_enemy and focus_enemy.data != null:
+			e_name = str(focus_enemy.data.name)
 		if RunManager.current_enemy_is_elite:
 			e_name = "Elite " + e_name
-		ui_enemy_hp.text = "%s" % e_name
+		if enemies.size() > 1:
+			e_name += " x%d" % _get_alive_enemies().size()
+		ui_enemy_hp.text = e_name
 
-		var maxv: int = int(int(enemy.max_hp) if ("max_hp" in enemy) else (int(enemy.data.base_hp) if ("data" in enemy and enemy.data) else 1))
+		var maxv: int = int(focus_enemy.max_hp) if ("max_hp" in focus_enemy) else 1
 		maxv = max(1, maxv)
-
-		var hpv: int = max(0, int(enemy.hp))
-		var block: int = int(enemy.current_defense) if ("current_defense" in enemy) else 0
-
+		var hpv: int = max(0, int(focus_enemy.hp))
+		var block: int = int(focus_enemy.current_defense) if ("current_defense" in focus_enemy) else 0
 		var ratio: float = float(hpv) / float(maxv)
-		if ui_enemy_bar and ui_enemy_bar_fill and ui_enemy_bar_back:
-			ui_enemy_bar_fill.size.x = ui_enemy_bar.size.x * ratio
-			ui_enemy_bar_back.size = ui_enemy_bar.size
-			if block > 0:
-				ui_enemy_bar_back.color = Color(0.08, 0.12, 0.35, 1)
-				ui_enemy_bar_fill.color = Color(0.15, 0.35, 0.85, 1)
-			else:
-				ui_enemy_bar_back.color = Color(0.35, 0.1, 0.1, 1)
-				ui_enemy_bar_fill.color = Color(0.8, 0.2, 0.2, 1)
 
-		if ui_enemy_bar_text:
-			if block > 0:
-				ui_enemy_bar_text.text = "🛡 %d   HP %d/%d" % [block, hpv, maxv]
-			else:
-				ui_enemy_bar_text.text = "HP %d/%d" % [hpv, maxv]
+		ui_enemy_bar_fill.size.x = ui_enemy_bar.size.x * ratio
+		ui_enemy_bar_back.size = ui_enemy_bar.size
+		if block > 0:
+			ui_enemy_bar_back.color = Color(0.08, 0.12, 0.35, 1)
+			ui_enemy_bar_fill.color = Color(0.15, 0.35, 0.85, 1)
+			ui_enemy_bar_text.text = "Block %d   HP %d/%d" % [block, hpv, maxv]
+		else:
+			ui_enemy_bar_back.color = Color(0.35, 0.1, 0.1, 1)
+			ui_enemy_bar_fill.color = Color(0.8, 0.2, 0.2, 1)
+			ui_enemy_bar_text.text = "HP %d/%d" % [hpv, maxv]
 
-		# Intent
-		if ui_enemy_intent and ("current_intent" in enemy):
-			var intent := int(enemy.current_intent)
+		var intent_parts: PackedStringArray = []
+		for e in _get_alive_enemies():
+			if not ("current_intent" in e):
+				continue
+			var p: String = ""
+			var intent: int = int(e.current_intent)
 			match intent:
 				EnemyData.Intent.ATTACK:
-					ui_enemy_intent.text = "Intent: ⚔️ %d" % int(enemy.damage)
+					var d: int = int(e.get_effective_attack_damage()) if e.has_method("get_effective_attack_damage") else int(e.damage)
+					p = "ATK %d" % d
 				EnemyData.Intent.DEFEND:
-					ui_enemy_intent.text = "Intent: 🛡 +5"
+					p = "DEF +5"
 				EnemyData.Intent.BUFF:
-					ui_enemy_intent.text = "Intent: ✨"
-				_:
-					ui_enemy_intent.text = ""
+					p = "BUFF"
+			if p != "":
+				intent_parts.append(p)
+		ui_enemy_intent.text = "Intent: %s" % " | ".join(intent_parts)
 
-		# Status row
-		if ui_enemy_status:
-			for c in ui_enemy_status.get_children():
-				c.queue_free()
+		for c in ui_enemy_status.get_children():
+			c.queue_free()
+		if status_tooltip != null:
+			status_tooltip.visible = false
+		if focus_enemy.has_method("get_effect_details"):
+			var effs: Dictionary = focus_enemy.get_effect_details()
+			for k in effs.keys():
+				var d: Dictionary = effs[k]
+				var stacks: int = int(d.get("stacks", 1))
+				var dur: int = int(d.get("duration", 0))
+				var title: String = str(d.get("title", k))
+				var desc: String = str(d.get("description", ""))
+				var l: Label = Label.new()
+				l.text = "%s x%d" % [title, stacks]
+				if dur > 0:
+					l.text += " (%d)" % dur
+				_bind_status_tooltip(l, title, desc)
+				ui_enemy_status.add_child(l)
+	else:
+		ui_enemy_hp.text = "No Enemies"
+		ui_enemy_intent.text = ""
+		ui_enemy_bar_fill.size.x = 0.0
+		ui_enemy_bar_text.text = "HP 0/0"
+		for c in ui_enemy_status.get_children():
+			c.queue_free()
 
-			if enemy.has_method("get_effects"):
-				var effs: Dictionary = enemy.get_effects()
-				for k in effs.keys():
-					var v := int(effs[k])
-					if v <= 0:
-						continue
-					var l := Label.new()
-					if str(k) == "burn":
-						l.text = "🔥%d" % v
-					else:
-						l.text = "%s:%d" % [str(k), v]
-					ui_enemy_status.add_child(l)
-
-	if player and player.has_method("toggle_shield"):
+	if player != null and player.has_method("toggle_shield"):
 		player.toggle_shield(player_defense > 0)
 
-	if ui_buff_stacks:
+	if ui_buff_stacks != null:
 		if enchant_attack_charges > 0:
 			ui_buff_stacks.text = "Enchanted: %d" % enchant_attack_charges
 			ui_buff_stacks.visible = true
 		else:
-			ui_buff_stacks.text = "Enchanted: 0"
 			ui_buff_stacks.visible = false
 
-	if ui_turn_label:
+	if ui_turn_label != null:
 		ui_turn_label.text = "Turn: %d" % turn_number
+	if ui_time_label != null:
+		ui_time_label.text = "Time: %s" % ("Night" if RunManager.is_night else "Day")
+
 	_refresh_relic_panel()
+	_refresh_player_effects_ui()
 
 
 func _assert_ui() -> bool:
-	var ok := true
-	if ui_player_bar == null: ok = false
-	if ui_enemy_hp == null: ok = false
-	if end_btn == null: ok = false
-	if hand_controller == null: ok = false
-	if hand_root == null: ok = false
-	if ui_deck == null: ok = false
-	if ui_discard == null: ok = false
-	if ui_energy == null: ok = false
-	return ok
+	return ui_player_bar != null and ui_enemy_hp != null and end_btn != null and hand_controller != null and hand_root != null and ui_deck != null and ui_discard != null and ui_energy != null
 
 
 func _setup_pile_ui() -> void:
@@ -260,13 +301,12 @@ func _setup_pile_ui() -> void:
 	pile_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	ui_root.add_child(pile_overlay)
 
-	var dim := ColorRect.new()
+	var dim: ColorRect = ColorRect.new()
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.color = Color(0, 0, 0, 0.55)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	pile_overlay.add_child(dim)
 
-	var panel := PanelContainer.new()
+	var panel: PanelContainer = PanelContainer.new()
 	panel.custom_minimum_size = Vector2(420, 320)
 	panel.anchor_left = 0.5
 	panel.anchor_top = 0.5
@@ -276,10 +316,9 @@ func _setup_pile_ui() -> void:
 	panel.offset_top = -160
 	panel.offset_right = 210
 	panel.offset_bottom = 160
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	pile_overlay.add_child(panel)
 
-	var vbox := VBoxContainer.new()
+	var vbox: VBoxContainer = VBoxContainer.new()
 	panel.add_child(vbox)
 
 	pile_title_label = Label.new()
@@ -288,18 +327,16 @@ func _setup_pile_ui() -> void:
 	pile_title_label.text = "Pile"
 	vbox.add_child(pile_title_label)
 
-	var scroll := ScrollContainer.new()
+	var scroll: ScrollContainer = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.custom_minimum_size = Vector2(380, 240)
 	vbox.add_child(scroll)
 
 	pile_cards_grid = GridContainer.new()
 	pile_cards_grid.columns = 3
-	pile_cards_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	pile_cards_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.add_child(pile_cards_grid)
 
-	var close_btn := Button.new()
+	var close_btn: Button = Button.new()
 	close_btn.text = "Close"
 	close_btn.pressed.connect(_hide_pile_overlay)
 	vbox.add_child(close_btn)
@@ -321,7 +358,6 @@ func _setup_relic_panel() -> void:
 
 	relic_icons_row = HBoxContainer.new()
 	relic_icons_row.alignment = BoxContainer.ALIGNMENT_END
-	relic_icons_row.mouse_filter = Control.MOUSE_FILTER_PASS
 	relic_panel.add_child(relic_icons_row)
 
 	relic_tooltip = PanelContainer.new()
@@ -332,7 +368,7 @@ func _setup_relic_panel() -> void:
 	relic_tooltip.z_index = 20
 	ui_root.add_child(relic_tooltip)
 
-	var tooltip_vbox := VBoxContainer.new()
+	var tooltip_vbox: VBoxContainer = VBoxContainer.new()
 	relic_tooltip.add_child(tooltip_vbox)
 
 	relic_tooltip_title = Label.new()
@@ -342,8 +378,76 @@ func _setup_relic_panel() -> void:
 	relic_tooltip_desc = Label.new()
 	relic_tooltip_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tooltip_vbox.add_child(relic_tooltip_desc)
-
 	_refresh_relic_panel()
+
+
+func _setup_time_label() -> void:
+	ui_time_label = Label.new()
+	ui_time_label.name = "TimeLabel"
+	ui_time_label.offset_left = 470.0
+	ui_time_label.offset_top = 6.0
+	ui_time_label.offset_right = 620.0
+	ui_time_label.offset_bottom = 34.0
+	ui_time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ui_root.add_child(ui_time_label)
+
+
+func _setup_player_status_row() -> void:
+	ui_player_status_row = HBoxContainer.new()
+	ui_player_status_row.name = "PlayerStatusRow"
+	ui_player_status_row.offset_left = 26.0
+	ui_player_status_row.offset_top = 612.0
+	ui_player_status_row.offset_right = 420.0
+	ui_player_status_row.offset_bottom = 640.0
+	ui_root.add_child(ui_player_status_row)
+
+
+func _setup_status_tooltip() -> void:
+	status_tooltip = PanelContainer.new()
+	status_tooltip.visible = false
+	status_tooltip.custom_minimum_size = Vector2(250.0, 80.0)
+	status_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	status_tooltip.z_index = 30
+	ui_root.add_child(status_tooltip)
+
+	var vbox: VBoxContainer = VBoxContainer.new()
+	status_tooltip.add_child(vbox)
+
+	status_tooltip_title = Label.new()
+	status_tooltip_title.add_theme_font_size_override("font_size", 15)
+	vbox.add_child(status_tooltip_title)
+
+	status_tooltip_desc = Label.new()
+	status_tooltip_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(status_tooltip_desc)
+
+
+func _bind_status_tooltip(label: Label, title: String, desc: String) -> void:
+	if label == null:
+		return
+	label.mouse_filter = Control.MOUSE_FILTER_STOP
+	label.mouse_default_cursor_shape = Control.CURSOR_HELP
+	var cb_enter: Callable = Callable(self, "_on_status_label_mouse_entered").bind(title, desc)
+	var cb_exit: Callable = Callable(self, "_on_status_label_mouse_exited")
+	if not label.mouse_entered.is_connected(cb_enter):
+		label.mouse_entered.connect(cb_enter)
+	if not label.mouse_exited.is_connected(cb_exit):
+		label.mouse_exited.connect(cb_exit)
+
+
+func _on_status_label_mouse_entered(title: String, desc: String) -> void:
+	if status_tooltip == null or status_tooltip_title == null or status_tooltip_desc == null:
+		return
+	status_tooltip_title.text = title
+	status_tooltip_desc.text = desc
+	var mouse_pos: Vector2 = get_viewport().get_mouse_position()
+	status_tooltip.global_position = mouse_pos + Vector2(16.0, 12.0)
+	status_tooltip.visible = true
+
+
+func _on_status_label_mouse_exited() -> void:
+	if status_tooltip != null:
+		status_tooltip.visible = false
 
 
 func _refresh_relic_panel() -> void:
@@ -353,14 +457,14 @@ func _refresh_relic_panel() -> void:
 	if new_signature == relic_signature_cached:
 		return
 	relic_signature_cached = new_signature
-
 	for child in relic_icons_row.get_children():
 		child.queue_free()
-
 	for relic in RunManager.relics:
 		if relic == null:
 			continue
-		var icon_holder := TextureRect.new()
+		if not relic.is_active_for_time(RunManager.is_night):
+			continue
+		var icon_holder: TextureRect = TextureRect.new()
 		icon_holder.custom_minimum_size = Vector2(34, 34)
 		icon_holder.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 		icon_holder.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -370,7 +474,7 @@ func _refresh_relic_panel() -> void:
 		icon_holder.mouse_entered.connect(_on_relic_icon_mouse_entered.bind(icon_holder, relic))
 		icon_holder.mouse_exited.connect(_on_relic_icon_mouse_exited)
 		relic_icons_row.add_child(icon_holder)
-	if relic_tooltip:
+	if relic_tooltip != null:
 		relic_tooltip.visible = false
 
 
@@ -380,6 +484,8 @@ func _build_relic_signature() -> String:
 	var parts: PackedStringArray = []
 	for relic in RunManager.relics:
 		if relic == null:
+			continue
+		if not relic.is_active_for_time(RunManager.is_night):
 			continue
 		parts.append(relic.id + "|" + relic.get_display_name())
 	return "||".join(parts)
@@ -398,19 +504,19 @@ func _on_relic_icon_mouse_entered(icon: TextureRect, relic: RelicData) -> void:
 	relic_tooltip_title.text = relic.get_display_name()
 	relic_tooltip_desc.text = relic.description
 	var size_hint: Vector2 = relic_tooltip.get_combined_minimum_size()
-	var p: Vector2 = icon.global_position + Vector2(-size_hint.x - 10.0, 8.0)
-	relic_tooltip.global_position = p
+	relic_tooltip.global_position = icon.global_position + Vector2(-size_hint.x - 10.0, 8.0)
 	relic_tooltip.visible = true
 
 
 func _on_relic_icon_mouse_exited() -> void:
-	if relic_tooltip:
+	if relic_tooltip != null:
 		relic_tooltip.visible = false
+
 
 func _bind_pile_label_events() -> void:
 	_bind_clickable_label(ui_deck, _on_deck_label_gui_input)
 	_bind_clickable_label(ui_discard, _on_discard_label_gui_input)
-	if ui_exhaust:
+	if ui_exhaust != null:
 		_bind_clickable_label(ui_exhaust, _on_exhaust_label_gui_input)
 
 
@@ -439,7 +545,6 @@ func _setup_deck() -> void:
 	elif not starting_deck.is_empty():
 		draw_pile = _duplicate_cards(starting_deck)
 		RunManager.deck = _duplicate_cards(starting_deck)
-
 	draw_pile.shuffle()
 
 
@@ -469,32 +574,29 @@ func _start_player_turn_setup() -> void:
 	turn_number = player_turns_started
 	energy = energy_max
 	player_defense = 0
+	_tick_player_effects(EffectData.TickWhen.START_TURN)
 	_update_energy_ui()
 	_update_ui()
-
 	await _draw_cards(hand_size)
 	_refresh_hand_ui()
 	_update_deck_ui()
 
 
 func _draw_cards(count: int) -> void:
-	for i in range(count):
+	for _i in range(count):
 		if draw_pile.is_empty():
 			if discard_pile.is_empty():
 				break
 			draw_pile = discard_pile.duplicate()
 			draw_pile.shuffle()
 			discard_pile.clear()
-
 		hand.append(draw_pile.pop_back())
-
 	await get_tree().process_frame
 
 
 func _refresh_hand_ui() -> void:
 	if hand_controller == null:
 		return
-
 	if hand_controller.has_method("clear_hand"):
 		hand_controller.clear_hand()
 	else:
@@ -502,14 +604,13 @@ func _refresh_hand_ui() -> void:
 			child.queue_free()
 
 	for card in hand:
-		var view = card_view_scene.instantiate()
+		var view: Node = card_view_scene.instantiate()
 		if "use_physics" in view:
 			view.use_physics = true
 		if view.has_method("setup"):
 			view.setup(card)
 		if view.has_signal("played"):
 			view.played.connect(_on_card_played.bind(card))
-
 		if hand_controller.has_method("add_card_to_hand"):
 			hand_controller.add_card_to_hand(view)
 		else:
@@ -519,13 +620,13 @@ func _refresh_hand_ui() -> void:
 func _update_deck_ui() -> void:
 	ui_deck.text = "Deck: %d" % draw_pile.size()
 	ui_discard.text = "Discard: %d" % discard_pile.size()
-	if ui_exhaust:
+	if ui_exhaust != null:
 		ui_exhaust.text = "Exhaust: %d" % exhaust_pile.size()
 
 
 func _update_energy_ui() -> void:
 	ui_energy.text = "Energy: %d/%d" % [energy, energy_max]
-	if ui_energy_orb_label:
+	if ui_energy_orb_label != null:
 		ui_energy_orb_label.text = "%d/%d" % [energy, energy_max]
 
 
@@ -551,44 +652,63 @@ func _play_card(card: CardData) -> void:
 	energy -= card_cost
 	_update_energy_ui()
 
-	# Block
 	if card_defense > 0:
 		player_defense += card_defense
 
-	# Buff card
 	if card.get_card_type() == CardData.CardType.BUFF and card.buff_kind == CardData.BuffKind.ENCHANT_ATTACK_EFFECT:
 		var charges: int = max(1, card_buff_charges if card_buff_charges > 0 else default_enchant_charges)
 		enchant_attack_charges += charges
 		enchant_effect = card_buff_effect if card_buff_effect != null else default_enchant_effect
 		if enchant_effect != null:
 			enchant_effect_durability = max(1, card.get_buff_effect_durability() if card.get_buff_effect_durability() > 0 else default_enchant_effect_durability)
+	elif card.get_card_type() == CardData.CardType.BUFF and card.buff_kind == CardData.BuffKind.APPLY_SELF_EFFECT:
+		var self_effect: EffectData = card_buff_effect
+		var self_dur: int = max(1, card.get_buff_effect_durability())
+		var self_val: int = max(1, card.get_buff_charges())
+		if self_effect != null:
+			var effect_copy: EffectData = self_effect.duplicate(true) as EffectData
+			if effect_copy == null:
+				effect_copy = self_effect
+			if self_val > 0:
+				effect_copy.value = self_val
+			_apply_player_effect(effect_copy, self_dur, 1)
 
-	# Damage + effects
-	if card_damage > 0:
-		var stop_pos: Vector2 = enemy.global_position + Vector2(-80.0, 0.0)
-		await _dash_to(player, stop_pos)
+	var targets: Array[Node2D] = []
+	if card.get_hits_all_enemies():
+		targets = _get_alive_enemies()
+	else:
+		var single_target: Node2D = _get_primary_enemy()
+		if single_target != null:
+			targets.append(single_target)
 
-		if player.has_method("attack_sequence"):
-			await player.call("attack_sequence", enemy)
+	if card_damage > 0 and not targets.is_empty():
+			var stop_pos: Vector2 = targets[0].global_position + Vector2(-80.0, 0.0)
+			await _dash_to(player, stop_pos)
+			if player.has_method("attack_sequence"):
+				await player.call("attack_sequence", targets[0])
 
-		if is_instance_valid(enemy) and enemy.has_method("take_damage"):
-			enemy.take_damage(card_damage)
-
-			# Эффект (EffectData)
-			if card.has_method("has_effect") and card.has_effect() and enemy.has_method("apply_effect") and card_effect != null:
-				var eff_dur: int = card.get_effect_durability()
-				if eff_dur > 0:
-					enemy.apply_effect(card_effect, eff_dur)
-
-			# Temporary enchant: next N attack cards additionally apply effect.
-			if enchant_attack_charges > 0 and enchant_effect != null and enemy.has_method("apply_effect"):
-				enemy.apply_effect(enchant_effect, enchant_effect_durability)
+			var dmg_bonus: int = _get_player_effect_value("strength_surge")
+			for t in targets:
+				if not is_instance_valid(t) or not t.has_method("take_damage"):
+					continue
+				t.take_damage(card_damage + dmg_bonus)
+				if card.has_method("has_effect") and card.has_effect() and t.has_method("apply_effect") and card_effect != null:
+					var eff_dur: int = card.get_effect_durability()
+					if eff_dur > 0:
+						t.apply_effect(card_effect, eff_dur)
+				if enchant_attack_charges > 0 and enchant_effect != null and t.has_method("apply_effect"):
+					t.apply_effect(enchant_effect, enchant_effect_durability)
+			if enchant_attack_charges > 0 and enchant_effect != null:
 				enchant_attack_charges -= 1
 
-		await _dash_to(player, player_anchor.global_position)
+			await _dash_to(player, player_anchor.global_position)
+	elif card_effect != null and not targets.is_empty():
+		for t in targets:
+			if is_instance_valid(t) and t.has_method("apply_effect"):
+				var eff_dur: int = max(1, card.get_effect_durability())
+				t.apply_effect(card_effect, eff_dur)
 
-	# move card to discard
-	var idx := hand.find(card)
+	var idx: int = hand.find(card)
 	if idx != -1:
 		hand.remove_at(idx)
 	if card.get_exhaust():
@@ -600,7 +720,7 @@ func _play_card(card: CardData) -> void:
 	_update_deck_ui()
 	_update_ui()
 
-	if (enemy == null) or (not is_instance_valid(enemy)) or (("hp" in enemy) and int(enemy.hp) <= 0):
+	if _all_enemies_dead():
 		_on_enemy_dead()
 		return
 
@@ -609,26 +729,31 @@ func _play_card(card: CardData) -> void:
 
 
 func _on_enemy_dead() -> void:
-	if is_instance_valid(enemy):
-		enemy.queue_free()
+	for enemy_instance in enemies:
+		if is_instance_valid(enemy_instance):
+			enemy_instance.queue_free()
+	enemies.clear()
 
-	var g_min := 10
-	var g_max := 25
-	if RunManager.current_enemy_data:
+	var g_min: int = 10
+	var g_max: int = 25
+	if RunManager.current_enemy_data != null:
 		g_min = int(RunManager.current_enemy_data.min_gold)
 		g_max = int(RunManager.current_enemy_data.max_gold)
 	var rolled_gold: int = randi_range(g_min, g_max)
 	if RunManager.current_enemy_is_elite:
 		rolled_gold = int(round(float(rolled_gold) * RunManager.elite_gold_multiplier))
 	RunManager.pending_gold = rolled_gold
-
+	if player_effects.has("regeneration"):
+		var heal: int = _get_player_effect_value("regeneration")
+		RunManager.current_hp = min(RunManager.max_hp, RunManager.current_hp + heal)
+	player_effects.clear()
 	RunManager.returning_from_fight = true
 	RunManager.reward_claimed = false
 	get_tree().change_scene_to_file("res://level.tscn")
 
 
 func _dash_to(actor: Node2D, target_pos: Vector2) -> void:
-	var t := create_tween()
+	var t: Tween = create_tween()
 	t.tween_property(actor, "global_position", target_pos, dash_time)
 	await t.finished
 
@@ -636,42 +761,42 @@ func _dash_to(actor: Node2D, target_pos: Vector2) -> void:
 func _on_end_turn_pressed() -> void:
 	if busy or not player_turn:
 		return
-
-	# 1) discard hand
 	for card in hand:
 		discard_pile.append(card)
 	hand.clear()
-
 	_refresh_hand_ui()
 	_update_deck_ui()
 	_set_buttons_enabled(false)
 
-	# 2) tick effects (end turn iteration)
 	await _tick_end_turn_effects()
+	_tick_player_effects(EffectData.TickWhen.END_TURN)
 	_update_ui()
-
-	if (enemy == null) or (not is_instance_valid(enemy)) or (("hp" in enemy) and int(enemy.hp) <= 0):
+	if _all_enemies_dead():
 		_on_enemy_dead()
 		return
 
-	# 3) enemy turn
 	player_turn = false
 	_start_turn()
 
 
 func _tick_end_turn_effects() -> void:
-	if is_instance_valid(enemy) and enemy.has_method("tick_end_turn_effects"):
-		await enemy.call("tick_end_turn_effects")
+	for enemy_instance in _get_alive_enemies():
+		if enemy_instance.has_method("tick_end_turn_effects"):
+			await enemy_instance.call("tick_end_turn_effects")
 
 
-func _on_enemy_hit_player(_target: Node) -> void:
+func _on_enemy_hit_player(_target: Node, source_enemy: Node2D) -> void:
 	var dmg: int = 0
-	if is_instance_valid(enemy) and ("damage" in enemy):
-		dmg = int(enemy.damage)
+	if is_instance_valid(source_enemy) and "damage" in source_enemy:
+		dmg = int(source_enemy.damage)
 
 	var taken: int = max(0, dmg - player_defense)
 	player_defense = max(0, player_defense - dmg)
-
+	if player_effects.has("parry") and taken > 0 and is_instance_valid(source_enemy) and source_enemy.has_method("take_damage"):
+		var prevented: int = int(round(float(taken) * 0.25))
+		var reflect: int = prevented
+		taken = max(0, taken - prevented)
+		source_enemy.take_damage(reflect)
 	if taken > 0:
 		RunManager.current_hp = max(0, int(RunManager.current_hp) - taken)
 		if is_instance_valid(player) and player.has_method("play_take_damage"):
@@ -683,38 +808,28 @@ func _on_enemy_hit_player(_target: Node) -> void:
 			return
 		get_tree().change_scene_to_file("res://menu.tscn")
 		return
-
 	_update_ui()
 
 
 func _enemy_action() -> void:
-	if not is_instance_valid(enemy):
+	var alive: Array[Node2D] = _get_alive_enemies()
+	if alive.is_empty():
 		player_turn = true
 		return
 
 	_update_ui()
+	for enemy_instance in alive:
+		if not is_instance_valid(enemy_instance):
+			continue
+		if enemy_instance.has_method("take_turn"):
+			await enemy_instance.call("take_turn", player, player_defense)
+		elif enemy_instance.has_method("execute_turn"):
+			await enemy_instance.call("execute_turn", player)
 
-	if ("hp" in enemy) and int(enemy.hp) <= 0:
+	if _all_enemies_dead():
 		_on_enemy_dead()
 		return
 
-	if enemy.has_signal("turn_finished") and not enemy.turn_finished.is_connected(_on_enemy_turn_finished):
-		enemy.turn_finished.connect(_on_enemy_turn_finished)
-
-	if enemy.has_signal("hit_player") and not enemy.hit_player.is_connected(_on_enemy_hit_player):
-		enemy.hit_player.connect(_on_enemy_hit_player)
-
-	if enemy.has_method("take_turn"):
-		await enemy.call("take_turn", player, player_defense)
-	else:
-		_on_enemy_hit_player(player)
-
-	if not player_turn:
-		player_turn = true
-		_start_turn()
-
-
-func _on_enemy_turn_finished() -> void:
 	player_turn = true
 	busy = false
 	_set_buttons_enabled(true)
@@ -731,7 +846,7 @@ func _on_speed_pressed() -> void:
 	if RunManager.battle_speed_mult > int(RunManager.battle_speed_max):
 		RunManager.battle_speed_mult = int(RunManager.battle_speed_min)
 	Engine.time_scale = float(RunManager.battle_speed_mult)
-	if ui_speed_btn:
+	if ui_speed_btn != null:
 		ui_speed_btn.text = "x" + str(RunManager.battle_speed_mult)
 
 
@@ -763,19 +878,18 @@ func _show_pile(title: String, cards: Array[CardData]) -> void:
 
 
 func _hide_pile_overlay() -> void:
-	if pile_overlay:
+	if pile_overlay != null:
 		pile_overlay.visible = false
 
 
 func _render_pile_cards(cards: Array[CardData]) -> void:
 	if pile_cards_grid == null:
 		return
-
 	for child in pile_cards_grid.get_children():
 		child.queue_free()
 
 	if cards.is_empty():
-		var empty_label := Label.new()
+		var empty_label: Label = Label.new()
 		empty_label.text = "Empty"
 		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		empty_label.add_theme_font_size_override("font_size", 18)
@@ -793,6 +907,79 @@ func _render_pile_cards(cards: Array[CardData]) -> void:
 		card_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card_view.setup(card)
 		pile_cards_grid.add_child(card_view)
+
+
+func _apply_player_effect(effect: EffectData, durability: int, stacks: int = 1) -> void:
+	if effect == null or effect.id == "":
+		return
+	var id: String = effect.id
+	var e: Dictionary = player_effects.get(id, {})
+	if e.is_empty():
+		e = {"data": effect, "dur": durability, "stacks": max(1, stacks)}
+	else:
+		e["data"] = effect
+		if effect.stackable:
+			e["stacks"] = int(e.get("stacks", 0)) + max(1, stacks)
+			e["dur"] = int(e.get("dur", 0)) + durability
+		else:
+			e["stacks"] = 1
+			e["dur"] = max(int(e.get("dur", 0)), durability)
+	player_effects[id] = e
+
+
+func _tick_player_effects(phase: EffectData.TickWhen) -> void:
+	var to_remove: Array[String] = []
+	for id in player_effects.keys():
+		var e: Dictionary = player_effects[id]
+		var eff: EffectData = e.get("data") as EffectData
+		if eff == null:
+			to_remove.append(id)
+			continue
+		if eff.tick_when != phase:
+			continue
+		var dur: int = int(e.get("dur", 0))
+		if dur > 0:
+			dur -= 1
+			e["dur"] = dur
+			player_effects[id] = e
+			if dur <= 0:
+				to_remove.append(id)
+	for rid in to_remove:
+		player_effects.erase(rid)
+
+
+func _refresh_player_effects_ui() -> void:
+	if ui_player_status_row == null:
+		return
+	for c in ui_player_status_row.get_children():
+		c.queue_free()
+	if status_tooltip != null:
+		status_tooltip.visible = false
+	for id in player_effects.keys():
+		var e: Dictionary = player_effects[id]
+		var eff: EffectData = e.get("data") as EffectData
+		if eff == null:
+			continue
+		var l: Label = Label.new()
+		var stacks: int = int(e.get("stacks", 1))
+		var dur: int = int(e.get("dur", 0))
+		l.text = "%s" % (eff.title if eff.title != "" else id)
+		if stacks > 1:
+			l.text += " x%d" % stacks
+		if dur > 0:
+			l.text += " (%d)" % dur
+		_bind_status_tooltip(l, eff.title, eff.description)
+		ui_player_status_row.add_child(l)
+
+
+func _get_player_effect_value(effect_id: String) -> int:
+	var e: Dictionary = player_effects.get(effect_id, {})
+	if e.is_empty():
+		return 0
+	var eff: EffectData = e.get("data") as EffectData
+	if eff == null:
+		return 0
+	return eff.value
 
 
 func _exit_tree() -> void:

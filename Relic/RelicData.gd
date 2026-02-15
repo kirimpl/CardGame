@@ -2,6 +2,7 @@
 class_name RelicData
 
 enum RelicRarity { COMMON, UNCOMMON, RARE, LEGENDARY }
+enum ActiveTime { ANY, DAY_ONLY, NIGHT_ONLY }
 
 @export_group("Identity")
 @export var id: String = ""
@@ -9,6 +10,8 @@ enum RelicRarity { COMMON, UNCOMMON, RARE, LEGENDARY }
 @export_multiline var description: String = ""
 @export var icon: Texture2D
 @export var rarity: RelicRarity = RelicRarity.COMMON
+@export var is_starter_relic: bool = false
+@export var active_time: ActiveTime = ActiveTime.ANY
 
 @export_group("Survivability")
 @export var max_hp_bonus: int = 0
@@ -16,6 +19,12 @@ enum RelicRarity { COMMON, UNCOMMON, RARE, LEGENDARY }
 @export_range(0.0, 1.0, 0.01) var heal_on_pickup_percent: float = 0.0
 @export var one_time_revive: bool = false
 @export_range(0.01, 1.0, 0.01) var revive_hp_percent: float = 0.3
+@export_range(0.0, 1.0, 0.01) var campfire_heal_bonus_percent: float = 0.0
+
+@export_group("Economy")
+@export_range(0.0, 0.95, 0.01) var merchant_discount_percent: float = 0.0
+@export_range(0.0, 0.95, 0.01) var smith_discount_percent: float = 0.0
+@export var smith_free_upgrades: int = 0
 
 @export_group("Card Buff Filters")
 @export var card_id_filters: PackedStringArray = PackedStringArray()
@@ -39,3 +48,13 @@ func has_card_stat_modifiers() -> bool:
 		or cost_delta != 0 \
 		or effect_durability_bonus != 0 \
 		or buff_charges_bonus != 0
+
+
+func is_active_for_time(is_night: bool) -> bool:
+	match active_time:
+		ActiveTime.DAY_ONLY:
+			return not is_night
+		ActiveTime.NIGHT_ONLY:
+			return is_night
+		_:
+			return true

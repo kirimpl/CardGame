@@ -11,11 +11,9 @@ var damage: int
 var current_defense: int = 0
 var current_intent: EnemyData.Intent
 
-# Активные эффекты:
 # id -> { "data": EffectData, "dur": int, "stacks": int }
 var effects: Dictionary = {}
 
-# Фолбэки на случай старых вызовов apply_effect("burn", dur)
 const DEFAULT_EFFECT_PATHS: Dictionary = {
 	"burn": "res://Cards/Effects/Burn.tres",
 }
@@ -40,7 +38,7 @@ const DEFAULT_EFFECT_PATHS: Dictionary = {
 @onready var intent_ui: Node2D = $IntentUI
 @onready var intent_label: Label = $IntentUI/Label
 
-var busy := false
+var busy: bool = false
 
 
 func setup(enemy_res: EnemyData, floor_level: int, is_elite: bool = false) -> void:
@@ -49,12 +47,10 @@ func setup(enemy_res: EnemyData, floor_level: int, is_elite: bool = false) -> vo
 		return
 
 	data = enemy_res
-	if anim:
+	if anim != null:
 		anim.sprite_frames = data.sprite_frames
-		# Force idle playback after swapping SpriteFrames (needed for some enemy sets).
 		anim.play("Idle")
 		anim.frame = 0
-
 		scale = Vector2(data.scale, data.scale)
 		anim.flip_h = data.flip_h
 		anim.position = data.battle_offset
@@ -66,21 +62,20 @@ func setup(enemy_res: EnemyData, floor_level: int, is_elite: bool = false) -> vo
 	damage = data.base_damage + (floor_level * floor_damage_scale)
 	if is_elite:
 		damage = int(round(float(damage) * elite_damage_multiplier))
+	if RunManager.is_night:
+		max_hp = int(round(float(max_hp) * RunManager.night_enemy_hp_multiplier))
+		hp = max_hp
+		damage = int(round(float(damage) * RunManager.night_enemy_damage_multiplier))
 	roll_intent()
 
 
 func _ready() -> void:
-	if intent_ui:
+	if intent_ui != null:
 		intent_ui.visible = false
 
 
 func roll_intent() -> void:
-	if data == null:
-		current_intent = EnemyData.Intent.ATTACK
-		_update_intent_visual()
-		return
-
-	if data.battle_actions.is_empty():
+	if data == null or data.battle_actions.is_empty():
 		current_intent = EnemyData.Intent.ATTACK
 	else:
 		current_intent = data.battle_actions.pick_random()
@@ -88,13 +83,13 @@ func roll_intent() -> void:
 
 
 func _update_intent_visual() -> void:
-	if not intent_ui or not intent_label:
+	if intent_ui == null or intent_label == null:
 		return
 	intent_ui.visible = true
 	intent_label.text = ""
 	match current_intent:
 		EnemyData.Intent.ATTACK:
-			intent_label.text = str(damage)
+			intent_label.text = str(get_effective_attack_damage())
 			intent_label.modulate = Color(1, 0.3, 0.3)
 		EnemyData.Intent.DEFEND:
 			intent_label.text = str(defend_amount)
@@ -107,40 +102,40 @@ func _update_intent_visual() -> void:
 func tick_end_turn_effects() -> void:
 	if hp <= 0:
 		return
+	await _tick_effects_for_phase(EffectData.TickWhen.END_TURN)
 
+
+func _tick_effects_for_phase(phase: EffectData.TickWhen) -> void:
 	var to_remove: Array[String] = []
-
 	for id in effects.keys():
 		var e: Dictionary = effects.get(id, {})
 		var eff: EffectData = e.get("data") as EffectData
 		var dur: int = int(e.get("dur", 0))
 		var stacks: int = int(e.get("stacks", 0))
-
-		if eff == null or dur <= 0:
+		if eff == null:
 			to_remove.append(str(id))
 			continue
 
-		# Тик на End Turn
-		if eff.tick_when == EffectData.TickWhen.END_TURN:
-			if eff.is_damage_over_time:
-				# Урон растёт от стаков только для damage эффектов
-				var dmg: int = max(0, int(eff.value) * max(1, stacks))
-				if dmg > 0:
-					hp -= dmg
-					hp = max(0, hp)
+		if eff.tick_when == phase and eff.is_damage_over_time:
+			var dot: int = 0
+			if eff.is_percent_of_current_hp_dot:
+				dot = int(round(float(hp) * (float(eff.value) / 100.0)))
+			else:
+				dot = max(0, int(eff.value) * max(1, stacks))
+			if dot > 0:
+				hp = max(0, hp - dot)
+				if hp > 0:
+					await play_hit_anim()
+				else:
+					await play_death()
+					return
 
-					if hp > 0:
-						await play_hit_anim()
-					else:
-						await play_death()
-						return
-
-		# Длительность уменьшается каждый End Turn
-		dur -= 1
-		e["dur"] = dur
-		effects[id] = e
-		if dur <= 0:
-			to_remove.append(str(id))
+		if dur > 0:
+			dur -= 1
+			e["dur"] = dur
+			effects[id] = e
+			if dur <= 0:
+				to_remove.append(str(id))
 
 	for rid in to_remove:
 		effects.erase(rid)
@@ -152,8 +147,18 @@ func execute_turn(player_target: Node2D) -> void:
 		busy = false
 		return
 
-	if intent_ui:
+	if intent_ui != null:
 		intent_ui.visible = false
+
+	await _tick_effects_for_phase(EffectData.TickWhen.START_TURN)
+	if hp <= 0:
+		busy = false
+		return
+
+	if _consume_stun_if_any():
+		roll_intent()
+		busy = false
+		return
 
 	match current_intent:
 		EnemyData.Intent.ATTACK:
@@ -167,11 +172,35 @@ func execute_turn(player_target: Node2D) -> void:
 	busy = false
 
 
+func _consume_stun_if_any() -> bool:
+	var e: Dictionary = effects.get("stun", {})
+	if e.is_empty():
+		return false
+	var eff: EffectData = e.get("data") as EffectData
+	if eff == null or eff.skip_turn_charges <= 0:
+		return false
+	var dur: int = int(e.get("dur", 0))
+	if dur <= 0:
+		return false
+	dur -= 1
+	if dur <= 0:
+		effects.erase("stun")
+	else:
+		e["dur"] = dur
+		effects["stun"] = e
+	return true
+
+
 func _attack_sequence(target: Node2D) -> void:
+	if _roll_miss():
+		await get_tree().create_timer(0.2).timeout
+		_play_anim("Idle")
+		return
+
 	var start_pos: Vector2 = global_position
 	var attack_pos: Vector2 = target.global_position + attack_lunge_offset
 
-	var tween := create_tween()
+	var tween: Tween = create_tween()
 	tween.tween_property(self, "global_position", attack_pos, 0.2).set_trans(Tween.TRANS_CUBIC)
 	await tween.finished
 
@@ -185,19 +214,24 @@ func _attack_sequence(target: Node2D) -> void:
 		Engine.time_scale = old_scale
 
 	emit_signal("hit_player", target)
-
 	await get_tree().create_timer(0.2).timeout
 
-	var return_tween := create_tween()
+	var return_tween: Tween = create_tween()
 	return_tween.tween_property(self, "global_position", start_pos, return_speed)
 	await return_tween.finished
-
 	_play_anim("Idle")
+
+
+func _roll_miss() -> bool:
+	var miss_chance: int = get_total_miss_chance_percent()
+	if miss_chance <= 0:
+		return false
+	return randi_range(1, 100) <= clampi(miss_chance, 0, 95)
 
 
 func _defend_sequence() -> void:
 	_play_anim("Idle")
-	var t := create_tween()
+	var t: Tween = create_tween()
 	t.tween_property(self, "modulate", Color.CYAN, 0.2)
 	t.tween_property(self, "modulate", Color.WHITE, 0.2)
 	await t.finished
@@ -206,22 +240,18 @@ func _defend_sequence() -> void:
 
 func _buff_sequence() -> void:
 	damage += buff_damage_amount
-	var t := create_tween()
+	var t: Tween = create_tween()
 	t.tween_property(self, "scale", scale * 1.2, 0.2)
 	t.tween_property(self, "scale", scale, 0.2)
 	await t.finished
 
 
 func apply_effect(effect_or_id: Variant, durability: int) -> void:
-	# Поддерживает оба варианта:
-	#  - apply_effect(EffectData, dur)
-	#  - apply_effect("burn", dur)  (старый код)
 	if durability <= 0:
 		return
 
-	var data_any = null
+	var data_any: Variant = null
 	var id: String = ""
-
 	if effect_or_id is EffectData:
 		data_any = effect_or_id
 		id = (data_any as EffectData).id
@@ -246,17 +276,17 @@ func apply_effect(effect_or_id: Variant, durability: int) -> void:
 	if e.is_empty():
 		e = {"data": eff, "dur": int(durability), "stacks": 1}
 	else:
-		# Все эффекты стакуются.
 		e["data"] = eff
-		e["dur"] = int(e.get("dur", 0)) + int(durability)
-		e["stacks"] = int(e.get("stacks", 0)) + 1
-
-	# Сохранить
+		if eff.stackable:
+			e["stacks"] = int(e.get("stacks", 0)) + 1
+			e["dur"] = int(e.get("dur", 0)) + int(durability)
+		else:
+			e["stacks"] = 1
+			e["dur"] = int(e.get("dur", 0)) + int(durability)
 	effects[id] = e
 
 
 func get_effects() -> Dictionary:
-	# Для UI отдаём стаки, чтобы было понятно "насколько сильно".
 	var out: Dictionary = {}
 	for id in effects.keys():
 		var e: Dictionary = effects[id]
@@ -264,8 +294,55 @@ func get_effects() -> Dictionary:
 	return out
 
 
+func get_effect_details() -> Dictionary:
+	var out: Dictionary = {}
+	for id in effects.keys():
+		var e: Dictionary = effects[id]
+		var eff: EffectData = e.get("data") as EffectData
+		if eff == null:
+			continue
+		out[id] = {
+			"title": eff.title,
+			"description": eff.description,
+			"stacks": int(e.get("stacks", 0)),
+			"duration": int(e.get("dur", 0)),
+		}
+	return out
+
+
+func get_effective_attack_damage() -> int:
+	var mult: float = 1.0
+	for id in effects.keys():
+		var e: Dictionary = effects[id]
+		var eff: EffectData = e.get("data") as EffectData
+		if eff == null:
+			continue
+		mult *= maxf(0.0, eff.outgoing_damage_multiplier)
+	return max(0, int(round(float(damage) * mult)))
+
+
+func get_total_miss_chance_percent() -> int:
+	var miss: int = 0
+	for id in effects.keys():
+		var e: Dictionary = effects[id]
+		var eff: EffectData = e.get("data") as EffectData
+		if eff == null:
+			continue
+		miss += max(0, eff.miss_chance_percent)
+	return miss
+
+
 func take_damage(amount: int) -> void:
 	var dealt: int = max(0, amount)
+	var incoming_mult: float = 1.0
+	for id in effects.keys():
+		var e: Dictionary = effects[id]
+		var eff: EffectData = e.get("data") as EffectData
+		if eff == null:
+			continue
+		incoming_mult *= eff.incoming_damage_multiplier
+	dealt = max(0, int(round(float(dealt) * incoming_mult)))
+
 	if current_defense > 0:
 		var absorbed: int = min(current_defense, dealt)
 		current_defense -= absorbed
@@ -310,6 +387,5 @@ func _wait_hit_frame() -> void:
 		await get_tree().process_frame
 
 
-# compatibility wrapper
 func take_turn(player_node: Node, _player_block: int) -> void:
 	await execute_turn(player_node)

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="EffectData" format=3]
+
+[ext_resource type="Script" path="res://Cards/EffectData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "strength_surge"
+title = "Power Surge"
+description = "Gain +2 damage from card attacks this turn."
+value = 2
+default_durability = 1
+stackable = false
+tick_when = 0

@@ -15,7 +15,7 @@ class_name CardData
 @export var effect_durability: int = 0
 
 enum CardType { ATTACK, DEFENSE, BUFF }
-enum BuffKind { NONE, ENCHANT_ATTACK_EFFECT }
+enum BuffKind { NONE, ENCHANT_ATTACK_EFFECT, APPLY_SELF_EFFECT }
 enum Rarity { COMMON, UNCOMMON, RARE, LEGENDARY }
 
 @export_group("Meta")
@@ -26,6 +26,9 @@ enum Rarity { COMMON, UNCOMMON, RARE, LEGENDARY }
 @export var buff_charges: int = 0
 @export var buff_effect: EffectData
 @export var buff_effect_durability: int = 0
+
+@export_group("Targeting")
+@export var hits_all_enemies: bool = false
 
 @export_group("Upgrade Constructor")
 @export var upgraded: bool = false
@@ -187,3 +190,7 @@ func get_rarity_name() -> String:
 			return "Legendary"
 		_:
 			return "Common"
+
+
+func get_hits_all_enemies() -> bool:
+	return hits_all_enemies

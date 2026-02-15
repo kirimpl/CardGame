@@ -3,11 +3,7 @@ extends CanvasLayer
 const RELIC_FALLBACK_ICON: Texture2D = preload("res://icon.svg")
 
 @export var all_cards_db: Array[CardData] = []
-@export var all_relics_db: Array[RelicData] = [
-	preload("res://Relic/Data/VitalCore.tres"),
-	preload("res://Relic/Data/PhoenixFeather.tres"),
-	preload("res://Relic/Data/WarBanner.tres"),
-]
+@export var all_relics_db: Array[RelicData] = []
 @export var reward_count: int = 3
 @export_range(0.0, 1.0, 0.01) var normal_common_weight: float = 0.7
 @export_range(0.0, 1.0, 0.01) var normal_uncommon_weight: float = 0.25
@@ -36,8 +32,38 @@ func _ready() -> void:
 			gold_label.text = "Gold +%d" % int(RunManager.pending_gold)
 		RunManager.pending_gold = 0
 
+	_sync_databases_from_run_manager()
+
 	_try_grant_relic_reward()
 	_generate_card_rewards()
+
+
+func _sync_databases_from_run_manager() -> void:
+	var card_seen: Dictionary = {}
+	for c in all_cards_db:
+		if c == null:
+			continue
+		card_seen[c.id] = true
+	for c in RunManager.get_available_card_pool():
+		if c == null:
+			continue
+		if card_seen.has(c.id):
+			continue
+		all_cards_db.append(c)
+		card_seen[c.id] = true
+
+	var relic_seen: Dictionary = {}
+	for r in all_relics_db:
+		if r == null:
+			continue
+		relic_seen[r.id] = true
+	for r in RunManager.get_available_relic_pool():
+		if r == null:
+			continue
+		if relic_seen.has(r.id):
+			continue
+		all_relics_db.append(r)
+		relic_seen[r.id] = true
 
 
 func _try_grant_relic_reward() -> void:
@@ -52,6 +78,10 @@ func _try_grant_relic_reward() -> void:
 	var candidates: Array[RelicData] = []
 	for relic in all_relics_db:
 		if relic == null:
+			continue
+		if relic.id.strip_edges() == "":
+			continue
+		if relic.is_starter_relic:
 			continue
 		if relic.id != "" and RunManager.has_relic_id(relic.id):
 			continue

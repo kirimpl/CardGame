@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "whirlwind"
+title = "Whirlwind"
+description = "Deal 6 damage to all enemies."
+cost = 2
+damage = 6
+rarity = 1
+hits_all_enemies = true

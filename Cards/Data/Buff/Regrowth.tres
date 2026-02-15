@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Resource" path="res://Cards/Effects/Regeneration.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "regrowth"
+title = "Regrowth"
+description = "Gain Regeneration. Heal 7 HP at end of battle."
+cost = 1
+rarity = 1
+buff_kind = 2
+buff_charges = 7
+buff_effect = ExtResource("2")
+buff_effect_durability = 99
+upgraded_description = "Gain Regeneration. Heal 10 HP at end of battle."
+upgraded_buff_charges = 10

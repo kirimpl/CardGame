@@ -23,6 +23,12 @@ enum EffectType { NONE, BURN, POISON }
 
 # Наносит ли урон на тике. Если да — сила растёт от стаков.
 @export var is_damage_over_time: bool = false
+@export var is_percent_of_current_hp_dot: bool = false
 
 enum TickWhen { END_TURN, START_TURN }
 @export var tick_when: TickWhen = TickWhen.END_TURN
+
+@export var miss_chance_percent: int = 0
+@export_range(0.0, 3.0, 0.01) var incoming_damage_multiplier: float = 1.0
+@export_range(0.0, 3.0, 0.01) var outgoing_damage_multiplier: float = 1.0
+@export var skip_turn_charges: int = 0
