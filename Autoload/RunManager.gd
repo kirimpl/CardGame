@@ -11,6 +11,8 @@ extends Node
 @export_range(1, 100, 1) var boss_floor: int = 10
 @export_range(0.0, 1.0, 0.01) var elite_chance: float = 0.20
 @export_range(1.0, 5.0, 0.05) var elite_gold_multiplier: float = 1.65
+@export_range(0.5, 1.5, 0.01) var early_floor_gold_multiplier: float = 0.85
+@export_range(0.5, 1.5, 0.01) var mid_floor_gold_multiplier: float = 0.93
 @export_range(0.0, 1.0, 0.01) var multi_enemy_chance: float = 0.35
 @export_range(2, 4, 1) var multi_enemy_max_count: int = 2
 @export var starting_relics: Array[RelicData] = []
@@ -334,6 +336,14 @@ func apply_merchant_discount(base_price: int) -> int:
 	return max(1, int(round(float(base_price) * (1.0 - discount))))
 
 
+func get_floor_gold_multiplier(floor: int) -> float:
+	if floor <= 3:
+		return early_floor_gold_multiplier
+	if floor <= 5:
+		return mid_floor_gold_multiplier
+	return 1.0
+
+
 func get_merchant_purge_price(base_price: int, increment: int) -> int:
 	var raw_price: int = max(0, base_price + (merchant_purge_count * max(0, increment)))
 	return apply_merchant_discount(raw_price)
@@ -491,4 +501,144 @@ func get_available_relic_pool() -> Array[RelicData]:
 		if relic.is_starter_relic:
 			continue
 		out.append(relic)
+	return out
+
+
+func export_state() -> Dictionary:
+	var data: Dictionary = {}
+	data["version"] = 1
+	data["current_floor"] = current_floor
+	data["current_act"] = current_act
+	data["gold"] = gold
+	data["pending_gold"] = pending_gold
+	data["battle_speed_mult"] = battle_speed_mult
+	data["current_hp"] = current_hp
+	data["current_enemy_is_elite"] = current_enemy_is_elite
+	data["returning_from_fight"] = returning_from_fight
+	data["reward_claimed"] = reward_claimed
+	data["used_smith_free_upgrades"] = used_smith_free_upgrades
+	data["merchant_purge_count"] = merchant_purge_count
+	data["is_night"] = is_night
+	data["current_enemy_path"] = current_enemy_data.resource_path if current_enemy_data != null else ""
+	data["deck"] = _serialize_card_array(deck)
+	data["relics"] = _serialize_relic_array(relics)
+	var consumed: Array[int] = []
+	for idx_any in consumed_one_shot_relic_indices.keys():
+		consumed.append(int(idx_any))
+	data["consumed_one_shot_relic_indices"] = consumed
+	return data
+
+
+func import_state(data: Dictionary) -> void:
+	if data.is_empty():
+		return
+
+	current_floor = int(data.get("current_floor", start_floor))
+	current_act = int(data.get("current_act", start_act))
+	gold = int(data.get("gold", start_gold))
+	pending_gold = int(data.get("pending_gold", 0))
+	battle_speed_mult = clampi(int(data.get("battle_speed_mult", battle_speed_min)), battle_speed_min, battle_speed_max)
+	current_enemy_is_elite = bool(data.get("current_enemy_is_elite", false))
+	returning_from_fight = bool(data.get("returning_from_fight", false))
+	reward_claimed = bool(data.get("reward_claimed", false))
+	used_smith_free_upgrades = int(data.get("used_smith_free_upgrades", 0))
+	merchant_purge_count = int(data.get("merchant_purge_count", 0))
+	is_night = bool(data.get("is_night", false))
+
+	_ensure_enemy_pools_for_current_act()
+	deck = _deserialize_card_array(data.get("deck", []))
+	relics = _deserialize_relic_array(data.get("relics", []))
+	consumed_one_shot_relic_indices.clear()
+	var consumed: Array = data.get("consumed_one_shot_relic_indices", [])
+	for idx_any in consumed:
+		consumed_one_shot_relic_indices[int(idx_any)] = true
+
+	current_enemy_data = null
+	var enemy_path: String = str(data.get("current_enemy_path", ""))
+	if enemy_path != "":
+		var enemy_res: Resource = load(enemy_path)
+		if enemy_res is EnemyData:
+			current_enemy_data = enemy_res as EnemyData
+
+	_recalculate_derived_stats()
+	current_hp = clampi(int(data.get("current_hp", max_hp)), 1, max_hp)
+
+
+func _serialize_card_array(cards: Array[CardData]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for card in cards:
+		if card == null:
+			continue
+		out.append({
+			"path": card.resource_path,
+			"id": card.id,
+			"upgraded": card.is_upgraded(),
+		})
+	return out
+
+
+func _deserialize_card_array(raw: Array) -> Array[CardData]:
+	var out: Array[CardData] = []
+	for item_any in raw:
+		if typeof(item_any) != TYPE_DICTIONARY:
+			continue
+		var item: Dictionary = item_any
+		var card_template: CardData = null
+		var path: String = str(item.get("path", ""))
+		if path != "":
+			var loaded: Resource = load(path)
+			if loaded is CardData:
+				card_template = loaded as CardData
+		if card_template == null:
+			var target_id: String = str(item.get("id", ""))
+			for c in get_available_card_pool():
+				if c != null and c.id == target_id:
+					card_template = c
+					break
+		if card_template == null:
+			continue
+		var card_copy: CardData = card_template.duplicate(true) as CardData
+		if card_copy == null:
+			card_copy = card_template
+		card_copy.set_upgraded(bool(item.get("upgraded", false)))
+		out.append(card_copy)
+	return out
+
+
+func _serialize_relic_array(items: Array[RelicData]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for relic in items:
+		if relic == null:
+			continue
+		out.append({
+			"path": relic.resource_path,
+			"id": relic.id,
+		})
+	return out
+
+
+func _deserialize_relic_array(raw: Array) -> Array[RelicData]:
+	var out: Array[RelicData] = []
+	for item_any in raw:
+		if typeof(item_any) != TYPE_DICTIONARY:
+			continue
+		var item: Dictionary = item_any
+		var relic_template: RelicData = null
+		var path: String = str(item.get("path", ""))
+		if path != "":
+			var loaded: Resource = load(path)
+			if loaded is RelicData:
+				relic_template = loaded as RelicData
+		if relic_template == null:
+			var target_id: String = str(item.get("id", ""))
+			for r in get_available_relic_pool():
+				if r != null and r.id == target_id:
+					relic_template = r
+					break
+		if relic_template == null:
+			continue
+		var relic_copy: RelicData = relic_template.duplicate(true) as RelicData
+		if relic_copy == null:
+			relic_copy = relic_template
+		out.append(relic_copy)
 	return out

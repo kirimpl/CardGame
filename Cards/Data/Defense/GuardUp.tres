@@ -1,12 +1,10 @@
-[gd_resource type="Resource" script_class="CardData" format=3]
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://ce46ox6a4bhd7"]
 
-[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Script" uid="uid://be11khx8iq8gm" path="res://Cards/CardData.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
 id = "guard_up"
 title = "Guard Up"
 description = "Gain 8 block."
-cost = 1
 defense = 8
-rarity = 0

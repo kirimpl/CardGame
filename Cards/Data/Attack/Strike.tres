@@ -8,7 +8,6 @@ id = "strike"
 title = "Strike"
 description = "Deal 6 damage."
 damage = 6
-rarity = 0
 can_appear_in_rewards = false
 can_appear_in_merchant = false
 metadata/_custom_type_script = "uid://be11khx8iq8gm"

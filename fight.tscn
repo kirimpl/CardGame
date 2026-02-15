@@ -19,6 +19,8 @@
 [ext_resource type="Resource" path="res://Cards/Data/Buff/EnchantedSword.tres" id="14_enchanted"]
 [ext_resource type="Script" uid="uid://2byr5g5sl7w2" path="res://Relic/RelicData.gd" id="15_wcprl"]
 [ext_resource type="Resource" uid="uid://ckg15us7uerf5" path="res://Relic/Data/WarBanner.tres" id="16_fwncr"]
+[ext_resource type="Resource" path="res://Cards/Data/Attack/QuickSlash.tres" id="17_quickslash"]
+[ext_resource type="Resource" path="res://Cards/Data/Defense/SecondWind.tres" id="18_secondwind"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_topbar"]
 bg_color = Color(0.08, 0.09, 0.1, 0.75)
@@ -354,7 +356,7 @@ texture = ExtResource("6_a4egk")
 script = ExtResource("2_m6wut")
 player_scene = ExtResource("3_hchht")
 enemy_scene = ExtResource("4_34m47")
-starting_deck = Array[ExtResource("10_i4q7v")]([ExtResource("11_a4egk"), ExtResource("14_enchanted"), ExtResource("12_he0cp"), ExtResource("13_fireslash")])
+starting_deck = Array[ExtResource("10_i4q7v")]([ExtResource("11_a4egk"), ExtResource("11_a4egk"), ExtResource("11_a4egk"), ExtResource("12_he0cp"), ExtResource("12_he0cp"), ExtResource("12_he0cp"), ExtResource("17_quickslash"), ExtResource("18_secondwind")])
 starting_relics = Array[ExtResource("15_wcprl")]([ExtResource("16_fwncr")])
 card_view_scene = ExtResource("12_8o1o4")
 

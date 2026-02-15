@@ -25,6 +25,9 @@ const DEFAULT_EFFECT_PATHS: Dictionary = {
 @export var floor_damage_scale: int = 1
 @export var elite_hp_multiplier: float = 1.5
 @export var elite_damage_multiplier: float = 1.35
+@export var early_normal_hp_bonus: int = 5
+@export var early_normal_damage_bonus: int = 2
+@export var early_normal_bonus_last_floor: int = 3
 @export var defend_amount: int = 5
 @export var buff_damage_amount: int = 2
 @export var attack_lunge_offset: Vector2 = Vector2(60, 0)
@@ -60,10 +63,14 @@ func setup(enemy_res: EnemyData, floor_level: int, is_elite: bool = false) -> vo
 		anim.position = data.battle_offset
 
 	max_hp = data.base_hp + (floor_level * floor_hp_scale)
+	if not is_elite and floor_level <= early_normal_bonus_last_floor:
+		max_hp += early_normal_hp_bonus
 	if is_elite:
 		max_hp = int(round(float(max_hp) * elite_hp_multiplier))
 	hp = max_hp
 	damage = data.base_damage + (floor_level * floor_damage_scale)
+	if not is_elite and floor_level <= early_normal_bonus_last_floor:
+		damage += early_normal_damage_bonus
 	if is_elite:
 		damage = int(round(float(damage) * elite_damage_multiplier))
 	if RunManager.is_night:

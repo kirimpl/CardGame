@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="CardData" format=3]
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://c8dl5vqxjpm5a"]
 
-[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Script" uid="uid://be11khx8iq8gm" path="res://Cards/CardData.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
@@ -9,4 +9,3 @@ title = "Quick Slash"
 description = "Deal 3 damage."
 cost = 0
 damage = 3
-rarity = 0

@@ -1,12 +1,11 @@
-[gd_resource type="Resource" script_class="CardData" format=3]
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://ot7c8pmlalbg"]
 
-[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Script" uid="uid://be11khx8iq8gm" path="res://Cards/CardData.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
 id = "twin_cut"
 title = "Twin Cut"
 description = "Deal 7 damage."
-cost = 1
 damage = 7
 rarity = 1

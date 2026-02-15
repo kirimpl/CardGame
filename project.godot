@@ -21,6 +21,8 @@ Transition="*res://Autoload/Transition.tscn"
 GameState="*res://Autoload/GameState.gd"
 RunManager="*res://Autoload/RunManager.gd"
 MusicManager="*res://music_manager.tscn"
+SaveSystem="*res://Autoload/SaveSystem.gd"
+DebugPanel="*res://Autoload/DebugPanel.gd"
 
 [display]
 

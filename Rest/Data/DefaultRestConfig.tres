@@ -1,11 +1,9 @@
-[gd_resource type="Resource" script_class="RestConfig" format=3]
+[gd_resource type="Resource" script_class="RestConfig" format=3 uid="uid://56wxgrge862i"]
 
-[ext_resource type="Script" path="res://Rest/RestConfig.gd" id="1"]
+[ext_resource type="Script" uid="uid://2f5e5y1apcy0" path="res://Rest/RestConfig.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
-merchant_card_offer_count = 3
-merchant_relic_offer_count = 2
 merchant_card_price_common = 40
 merchant_card_price_uncommon = 60
 merchant_card_price_rare = 90
@@ -14,6 +12,3 @@ merchant_relic_price_common = 95
 merchant_relic_price_uncommon = 140
 merchant_relic_price_rare = 210
 merchant_relic_price_legendary = 300
-merchant_purge_price_base = 50
-merchant_purge_price_increment = 25
-smith_upgrade_price = 90

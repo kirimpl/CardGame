@@ -758,6 +758,8 @@ func _on_enemy_dead() -> void:
 	var rolled_gold: int = randi_range(g_min, g_max)
 	if RunManager.current_enemy_is_elite:
 		rolled_gold = int(round(float(rolled_gold) * RunManager.elite_gold_multiplier))
+	rolled_gold = int(round(float(rolled_gold) * RunManager.get_floor_gold_multiplier(RunManager.current_floor)))
+	rolled_gold = max(1, rolled_gold)
 	RunManager.pending_gold = rolled_gold
 	if player_effects.has("regeneration"):
 		var heal: int = _get_player_effect_value("regeneration")

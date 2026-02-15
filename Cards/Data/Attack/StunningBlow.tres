@@ -8,7 +8,6 @@ script = ExtResource("1")
 id = "stunning_blow"
 title = "Stunning Blow"
 description = "Deal 2 damage and stun target."
-cost = 1
 damage = 2
 effect = ExtResource("2")
 effect_durability = 1
