@@ -90,7 +90,7 @@ func roll_intent() -> void:
 	if data == null or data.battle_actions.is_empty():
 		current_intent = EnemyData.Intent.ATTACK
 	else:
-		current_intent = data.battle_actions.pick_random()
+		current_intent = int(RunManager.pick_from_array_run(data.battle_actions))
 	_update_intent_visual()
 
 
@@ -244,7 +244,7 @@ func _roll_miss() -> bool:
 	var miss_chance: int = get_total_miss_chance_percent()
 	if miss_chance <= 0:
 		return false
-	return randi_range(1, 100) <= clampi(miss_chance, 0, 95)
+	return RunManager.rolli_range_run(1, 100) <= clampi(miss_chance, 0, 95)
 
 
 func _defend_sequence() -> void:
@@ -290,7 +290,7 @@ func _build_effect_payloads(configs: Array[EnemyAppliedEffectRes]) -> Array[Dict
 		var effect: EffectData = cfg.effect as EffectData
 		if effect == null or effect.id == "":
 			continue
-		var roll: int = randi_range(1, 100)
+		var roll: int = RunManager.rolli_range_run(1, 100)
 		var chance: int = clampi(int(cfg.chance_percent), 0, 100)
 		if RunManager.is_night:
 			chance = clampi(chance + max(0, night_debuff_chance_bonus_percent), 0, 100)

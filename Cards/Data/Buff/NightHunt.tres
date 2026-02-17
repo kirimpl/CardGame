@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Resource" path="res://Cards/Effects/StrengthSurge.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "night_hunt"
+title = "Night Hunt"
+description = "Gain Strength Surge for 1 turn. Draw 1 card."
+cost = 1
+rarity = 2
+unlock_level = 5
+buff_kind = 2
+buff_charges = 2
+buff_effect = ExtResource("2")
+buff_effect_durability = 1
+cards_to_draw = 1
+upgraded_cost = 0
+upgraded_buff_charges = 3

@@ -119,7 +119,7 @@ func _setup_battle_state() -> void:
 
 
 func _open_random_event_now() -> void:
-	var roll: int = randi_range(0, 2)
+	var roll: int = RunManager.rolli_range_run(0, 2)
 	match roll:
 		0:
 			_open_event_forgotten_shrine()
@@ -273,9 +273,9 @@ func _try_start_event_room() -> bool:
 	if RunManager.current_floor <= 1:
 		return false
 	var chance: float = _get_event_room_chance_for_floor(RunManager.current_floor)
-	if randf() >= chance:
+	if RunManager.rollf_run() >= chance:
 		return false
-	var roll: int = randi_range(0, 2)
+	var roll: int = RunManager.rolli_range_run(0, 2)
 	match roll:
 		0:
 			_open_event_forgotten_shrine()
@@ -384,7 +384,7 @@ func _pick_reward_card_by_rarity(rarity: CardData.Rarity) -> CardData:
 		candidates.append(c)
 	if candidates.is_empty():
 		return null
-	var chosen: CardData = candidates.pick_random() as CardData
+	var chosen: CardData = RunManager.pick_from_array_run(candidates) as CardData
 	if chosen == null:
 		return null
 	var copy: CardData = chosen.duplicate(true) as CardData
@@ -401,7 +401,7 @@ func _pick_random_relic_reward() -> RelicData:
 		candidates.append(relic)
 	if candidates.is_empty():
 		return null
-	return candidates.pick_random() as RelicData
+	return RunManager.pick_from_array_run(candidates) as RelicData
 
 
 func _add_random_curse_to_deck() -> void:
@@ -409,7 +409,7 @@ func _add_random_curse_to_deck() -> void:
 		"res://Cards/Data/Curse/Doubt.tres",
 		"res://Cards/Data/Curse/Regret.tres",
 	])
-	var picked_path: String = paths[randi_range(0, paths.size() - 1)]
+	var picked_path: String = paths[RunManager.rolli_range_run(0, paths.size() - 1)]
 	var res: Resource = load(picked_path)
 	if res is CardData:
 		var card_template: CardData = res as CardData
@@ -437,7 +437,7 @@ func _upgrade_random_non_upgraded_card() -> bool:
 		candidates.append(i)
 	if candidates.is_empty():
 		return false
-	var idx: int = candidates.pick_random()
+	var idx: int = int(RunManager.pick_from_array_run(candidates))
 	RunManager.deck[idx].set_upgraded(true)
 	return true
 
@@ -528,7 +528,7 @@ func _roll_merchant_offers() -> void:
 		card_pool.append(pool_card)
 	var used_card_ids: Dictionary = {}
 	while merchant_card_offers.size() < rest_config.merchant_card_offer_count and not card_pool.is_empty():
-		var picked: CardData = card_pool.pick_random() as CardData
+		var picked: CardData = RunManager.pick_from_array_run(card_pool) as CardData
 		if picked == null:
 			break
 		if used_card_ids.has(picked.id):
@@ -550,7 +550,7 @@ func _roll_merchant_offers() -> void:
 		relic_pool.append(relic_res)
 
 	while merchant_relic_offers.size() < rest_config.merchant_relic_offer_count and not relic_pool.is_empty():
-		var picked_relic: RelicData = relic_pool.pick_random() as RelicData
+		var picked_relic: RelicData = RunManager.pick_from_array_run(relic_pool) as RelicData
 		if picked_relic == null:
 			break
 		var relic_copy: RelicData = picked_relic.duplicate(true) as RelicData

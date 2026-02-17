@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="RelicData" format=3]
+
+[ext_resource type="Script" path="res://Relic/RelicData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "ember_reactor"
+title = "Ember Reactor"
+description = "Attack cards with effects gain +1 effect duration."
+rarity = 1
+unlock_level = 3
+use_card_type_filter = true
+card_type_filter = 0
+effect_durability_bonus = 1

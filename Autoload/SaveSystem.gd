@@ -2,6 +2,8 @@ extends Node
 
 const SAVE_PATH: String = "user://run_save.json"
 const SIM_CSV_PATH: String = "user://sim_report.csv"
+const RUN_HISTORY_PATH: String = "user://run_history.json"
+@export_range(10, 500, 10) var run_history_limit: int = 120
 
 
 func has_save() -> bool:
@@ -11,6 +13,30 @@ func has_save() -> bool:
 func clear_save() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(SAVE_PATH)
+
+
+func append_run_history(summary: Dictionary) -> void:
+	if summary.is_empty():
+		return
+	var history: Array[Dictionary] = _load_run_history()
+	var row: Dictionary = summary.duplicate(true)
+	row["saved_at_unix"] = Time.get_unix_time_from_system()
+	history.append(row)
+	while history.size() > run_history_limit:
+		history.remove_at(0)
+	_store_run_history(history)
+
+
+func get_run_history(max_entries: int = 30) -> Array[Dictionary]:
+	var history: Array[Dictionary] = _load_run_history()
+	if history.is_empty():
+		return []
+	var out: Array[Dictionary] = []
+	var count: int = clampi(max_entries, 1, run_history_limit)
+	var start_idx: int = max(0, history.size() - count)
+	for i in range(start_idx, history.size()):
+		out.append(history[i])
+	return out
 
 
 func save_run() -> bool:
@@ -306,3 +332,29 @@ func _sim_dict_to_csv_row(floor: int, mode: String, data: Dictionary) -> String:
 	var avg_turns: float = float(data.get("avg_turns", 0.0))
 	var avg_hp_left: float = float(data.get("avg_hp_left", 0.0))
 	return "%d,%s,%d,%d,%.4f,%.4f,%.4f" % [floor, mode, runs, wins, winrate, avg_turns, avg_hp_left]
+
+
+func _load_run_history() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if not FileAccess.file_exists(RUN_HISTORY_PATH):
+		return out
+	var f: FileAccess = FileAccess.open(RUN_HISTORY_PATH, FileAccess.READ)
+	if f == null:
+		return out
+	var text: String = f.get_as_text()
+	f.close()
+	var parsed: Variant = JSON.parse_string(text)
+	if parsed is Array:
+		for item_any in parsed:
+			if typeof(item_any) == TYPE_DICTIONARY:
+				out.append((item_any as Dictionary).duplicate(true))
+	return out
+
+
+func _store_run_history(rows: Array[Dictionary]) -> void:
+	var f: FileAccess = FileAccess.open(RUN_HISTORY_PATH, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(JSON.stringify(rows, "\t"))
+	f.flush()
+	f.close()

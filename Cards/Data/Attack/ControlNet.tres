@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Resource" path="res://Cards/Effects/Weak.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "control_net"
+title = "Control Net"
+description = "Deal 5 damage. Apply Weak (2)."
+cost = 1
+damage = 5
+effect = ExtResource("2")
+effect_durability = 2
+rarity = 2
+unlock_level = 4
+upgraded_damage = 7
+upgraded_effect_durability = 3

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Resource" path="res://Cards/Effects/Parry.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "bulwark_oath"
+title = "Bulwark Oath"
+description = "Gain 9 Block. Gain Parry (1)."
+cost = 1
+defense = 9
+rarity = 2
+unlock_level = 4
+buff_kind = 2
+buff_charges = 1
+buff_effect = ExtResource("2")
+buff_effect_durability = 1
+upgraded_defense = 12
+upgraded_buff_effect_durability = 2

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Resource" path="res://Cards/Effects/Burn.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "cinder_barrage"
+title = "Cinder Barrage"
+description = "Deal 4 damage to all enemies. Apply Burn (1)."
+cost = 1
+damage = 4
+effect = ExtResource("2")
+effect_durability = 1
+rarity = 1
+unlock_level = 3
+hits_all_enemies = true
+upgraded_damage = 6
+upgraded_effect_durability = 2

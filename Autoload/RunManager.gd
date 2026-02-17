@@ -36,6 +36,7 @@ const ROOM_BOSS: String = "BOSS"
 @export_file("*.tscn") var run_result_scene_path: String = "res://UI/run_result.tscn"
 @export_range(2, 6, 1) var map_lane_count: int = 3
 @export_range(1, 3, 1) var map_branch_width: int = 1
+@export var fixed_seed: int = 0
 
 var current_floor: int = 1
 var current_act: int = 1
@@ -61,6 +62,10 @@ var map_lane_profiles: Dictionary = {}
 var map_generated_act: int = -1
 var current_map_lane: int = 1
 var combat_log: Array[String] = []
+var combat_events: Array[Dictionary] = []
+var replay_events: Array[Dictionary] = []
+var run_seed: int = 0
+var rng_state: int = 0
 var run_stats: Dictionary = {}
 var last_run_summary: Dictionary = {}
 
@@ -72,8 +77,8 @@ var all_relics_cache: Array[RelicData] = []
 var loaded_enemy_act: int = -1
 
 func _ready() -> void:
-	start_new_run()
 	_randomize_once()
+	start_new_run()
 	_load_enemy_pools()
 	_load_content_pools()
 
@@ -81,6 +86,58 @@ func _ready() -> void:
 func _randomize_once() -> void:
 	if Engine.get_frames_drawn() == 0:
 		randomize()
+
+
+func _init_rng(seed_value: int) -> void:
+	run_seed = seed_value
+	seed(seed_value)
+	rng_state = seed_value
+
+
+func set_run_seed(seed_value: int) -> void:
+	_init_rng(seed_value)
+
+
+func get_run_seed() -> int:
+	return run_seed
+
+
+func _rollf() -> float:
+	var v: float = randf()
+	rng_state = randi()
+	return v
+
+
+func _rollf_range(from_value: float, to_value: float) -> float:
+	var v: float = randf_range(from_value, to_value)
+	rng_state = randi()
+	return v
+
+
+func _rolli_range(from_value: int, to_value: int) -> int:
+	var v: int = randi_range(from_value, to_value)
+	rng_state = randi()
+	return v
+
+
+func _pick_index(count: int) -> int:
+	if count <= 0:
+		return -1
+	return _rolli_range(0, count - 1)
+
+
+func rollf_run() -> float:
+	return _rollf()
+
+
+func rolli_range_run(from_value: int, to_value: int) -> int:
+	return _rolli_range(from_value, to_value)
+
+
+func pick_from_array_run(items: Array) -> Variant:
+	if items.is_empty():
+		return null
+	return items[_pick_index(items.size())]
 
 
 func _load_enemy_pools() -> void:
@@ -208,7 +265,10 @@ func pick_enemy_for_floor() -> EnemyData:
 	if pool.is_empty():
 		return null
 
-	current_enemy_data = pool.pick_random() as EnemyData
+	var idx: int = _pick_index(pool.size())
+	current_enemy_data = null
+	if idx >= 0:
+		current_enemy_data = pool[idx]
 	current_enemy_is_elite = (diff == "ELITE")
 	return current_enemy_data
 
@@ -220,12 +280,14 @@ func get_fight_enemy_count() -> int:
 		return 1
 	if multi_enemy_max_count < 2:
 		return 1
-	if randf() >= multi_enemy_chance:
+	if _rollf() >= multi_enemy_chance:
 		return 1
-	return randi_range(2, multi_enemy_max_count)
+	return _rolli_range(2, multi_enemy_max_count)
 
 
 func start_new_run() -> void:
+	var seed_value: int = fixed_seed if fixed_seed != 0 else int(Time.get_unix_time_from_system()) + int(randi())
+	_init_rng(seed_value)
 	current_floor = start_floor
 	current_act = start_act
 	gold = start_gold
@@ -249,6 +311,8 @@ func start_new_run() -> void:
 	map_generated_act = -1
 	current_map_lane = clampi(current_map_lane, 0, max(0, map_lane_count - 1))
 	combat_log.clear()
+	combat_events.clear()
+	replay_events.clear()
 	last_run_summary.clear()
 	run_stats = {
 		"fights_won": 0,
@@ -263,6 +327,7 @@ func start_new_run() -> void:
 	bootstrap_starting_relics_from_fight_scene()
 	apply_starting_relics()
 	log_combat("Run started. Floor %d" % current_floor)
+	record_replay_event("run_start", {"seed": run_seed, "floor": current_floor, "act": current_act})
 
 
 func next_floor() -> void:
@@ -297,7 +362,7 @@ func get_enemy_difficulty() -> String:
 		return "NORMAL"
 	if current_floor == boss_floor:
 		return "BOSS"
-	if randf() < elite_chance:
+	if _rollf() < elite_chance:
 		return "ELITE"
 	return "NORMAL"
 
@@ -305,6 +370,7 @@ func get_enemy_difficulty() -> String:
 func toggle_day_night() -> void:
 	is_night = not is_night
 	_recalculate_derived_stats()
+	record_replay_event("time_toggle", {"is_night": is_night})
 
 
 func log_combat(entry: String) -> void:
@@ -314,6 +380,60 @@ func log_combat(entry: String) -> void:
 	combat_log.append(text)
 	if combat_log.size() > 180:
 		combat_log.remove_at(0)
+
+
+func log_combat_event(category: String, actor: String, action: String, result: String, turn: int = 0) -> void:
+	var event: Dictionary = {
+		"turn": max(0, turn),
+		"category": category.strip_edges().to_upper(),
+		"actor": actor.strip_edges(),
+		"action": action.strip_edges(),
+		"result": result.strip_edges(),
+	}
+	combat_events.append(event)
+	if combat_events.size() > 260:
+		combat_events.remove_at(0)
+
+	var line: String = "Turn %d | %s | %s | %s" % [max(0, turn), event["actor"], event["action"], event["result"]]
+	log_combat(line)
+	record_replay_event("combat", event)
+
+
+func get_combat_events_tail(max_entries: int = 40, category_filter: String = "ALL") -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var wanted: String = category_filter.strip_edges().to_upper()
+	var count: int = clampi(max_entries, 1, 260)
+	for i in range(combat_events.size() - 1, -1, -1):
+		var ev: Dictionary = combat_events[i]
+		var cat: String = str(ev.get("category", "SYSTEM")).to_upper()
+		if wanted != "" and wanted != "ALL" and wanted != cat:
+			continue
+		out.push_front(ev)
+		if out.size() >= count:
+			break
+	return out
+
+
+func record_replay_event(event_type: String, payload: Dictionary = {}) -> void:
+	var event: Dictionary = {
+		"ts_ms": Time.get_ticks_msec(),
+		"floor": current_floor,
+		"act": current_act,
+		"type": event_type.strip_edges().to_lower(),
+		"payload": payload.duplicate(true),
+	}
+	replay_events.append(event)
+	if replay_events.size() > 1800:
+		replay_events.remove_at(0)
+
+
+func get_replay_events_tail(max_entries: int = 120) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var count: int = clampi(max_entries, 1, 1800)
+	var start_idx: int = max(0, replay_events.size() - count)
+	for i in range(start_idx, replay_events.size()):
+		out.append(replay_events[i])
+	return out
 
 
 func get_combat_log_tail(max_entries: int = 40) -> PackedStringArray:
@@ -379,6 +499,7 @@ func travel_to_room(floor: int, lane: int, room_type: String) -> void:
 	returning_from_fight = false
 	reward_claimed = false
 	log_combat("Travel: floor %d -> %s" % [current_floor, room_type])
+	record_replay_event("travel", {"floor": floor, "lane": lane, "room_type": room_type})
 	get_tree().call_deferred("change_scene_to_file", get_scene_for_floor(current_floor))
 
 
@@ -417,7 +538,7 @@ func _pick_weighted_room(weights: Dictionary) -> String:
 		total += maxf(0.0, float(weights[key]))
 	if total <= 0.0:
 		return ROOM_ENEMY
-	var roll: float = randf() * total
+	var roll: float = _rollf() * total
 	for key in weights.keys():
 		roll -= maxf(0.0, float(weights[key]))
 		if roll <= 0.0:
@@ -438,7 +559,7 @@ func _ensure_map_generated() -> void:
 	current_map_lane = clampi(current_map_lane, 0, lanes - 1)
 	for lane in range(lanes):
 		var profile: String = "combat"
-		var r: int = randi_range(0, 2)
+		var r: int = _rolli_range(0, 2)
 		if r == 1:
 			profile = "elite"
 		elif r == 2:
@@ -460,18 +581,18 @@ func _ensure_map_generated() -> void:
 			lanes_this_floor.append(lanes / 2)
 		else:
 			var path_progress: float = float(floor - current_floor) / float(max(1, boss_floor - current_floor))
-			var desired_width: int = clampi(int(round(lerpf(float(lanes), 2.0, path_progress) + randf_range(-1.0, 1.0))), 2, lanes)
+			var desired_width: int = clampi(int(round(lerpf(float(lanes), 2.0, path_progress) + _rollf_range(-1.0, 1.0))), 2, lanes)
 			var lane_set: Dictionary = {}
 			for pl in prev_lanes:
-				lane_set[clampi(int(pl) + randi_range(-1, 1), 0, lanes - 1)] = true
-				if randf() < 0.35:
-					lane_set[clampi(int(pl) + randi_range(-2, 2), 0, lanes - 1)] = true
+				lane_set[clampi(int(pl) + _rolli_range(-1, 1), 0, lanes - 1)] = true
+				if _rollf() < 0.35:
+					lane_set[clampi(int(pl) + _rolli_range(-2, 2), 0, lanes - 1)] = true
 			while lane_set.size() < desired_width:
-				lane_set[randi_range(0, lanes - 1)] = true
+				lane_set[_rolli_range(0, lanes - 1)] = true
 			var lane_arr: Array = lane_set.keys()
 			lane_arr.sort()
 			while lane_arr.size() > desired_width:
-				lane_arr.remove_at(randi_range(0, lane_arr.size() - 1))
+				lane_arr.remove_at(_rolli_range(0, lane_arr.size() - 1))
 			for l in lane_arr:
 				lanes_this_floor.append(int(l))
 
@@ -494,8 +615,8 @@ func _ensure_map_generated() -> void:
 				continue
 			var primary: int = choices[0]
 			map_edges.append({"from_floor": floor - 1, "from_lane": int(pl), "to_floor": floor, "to_lane": primary})
-			if choices.size() > 1 and randf() < 0.33:
-				var idx: int = min(choices.size() - 1, randi_range(1, min(2, choices.size() - 1)))
+			if choices.size() > 1 and _rollf() < 0.33:
+				var idx: int = min(choices.size() - 1, _rolli_range(1, min(2, choices.size() - 1)))
 				map_edges.append({"from_floor": floor - 1, "from_lane": int(pl), "to_floor": floor, "to_lane": choices[idx]})
 
 		for tl in lanes_this_floor:
@@ -540,14 +661,19 @@ func finish_run(victory: bool, reason: String) -> void:
 		"victory": victory,
 		"reason": reason,
 		"floor_reached": current_floor,
+		"act_reached": current_act,
 		"gold": gold,
 		"stats": run_stats.duplicate(true),
 		"xp_gain": xp_gain,
 		"xp_result": xp_result,
 		"deck_size": deck.size(),
 		"relic_count": relics.size(),
+		"run_seed": run_seed,
 	}
 	log_combat("Run finished: %s (floor %d)" % [reason, current_floor])
+	var save_node: Node = get_node_or_null("/root/SaveSystem")
+	if save_node != null and save_node.has_method("append_run_history"):
+		save_node.call("append_run_history", last_run_summary)
 	get_tree().call_deferred("change_scene_to_file", run_result_scene_path)
 
 
@@ -568,6 +694,7 @@ func on_boss_defeated() -> bool:
 	map_generated_act = -1
 	current_map_lane = clampi(current_map_lane, 0, max(0, map_lane_count - 1))
 	log_combat("Act advanced to %d" % current_act)
+	record_replay_event("act_advance", {"act": current_act})
 	get_tree().call_deferred("change_scene_to_file", level_scene_path)
 	return false
 
@@ -886,6 +1013,10 @@ func export_state() -> Dictionary:
 	data["map_generated_act"] = map_generated_act
 	data["current_map_lane"] = current_map_lane
 	data["combat_log"] = combat_log
+	data["combat_events"] = combat_events
+	data["replay_events"] = replay_events
+	data["run_seed"] = run_seed
+	data["rng_state"] = rng_state
 	data["run_stats"] = run_stats
 	data["last_run_summary"] = last_run_summary
 	data["current_enemy_path"] = current_enemy_data.resource_path if current_enemy_data != null else ""
@@ -941,6 +1072,24 @@ func import_state(data: Dictionary) -> void:
 	if log_any is Array:
 		for item in log_any:
 			combat_log.append(str(item))
+	var combat_events_any: Variant = data.get("combat_events", [])
+	combat_events.clear()
+	if combat_events_any is Array:
+		for ev_any in combat_events_any:
+			if typeof(ev_any) == TYPE_DICTIONARY:
+				combat_events.append((ev_any as Dictionary).duplicate(true))
+	var replay_events_any: Variant = data.get("replay_events", [])
+	replay_events.clear()
+	if replay_events_any is Array:
+		for replay_any in replay_events_any:
+			if typeof(replay_any) == TYPE_DICTIONARY:
+				replay_events.append((replay_any as Dictionary).duplicate(true))
+	run_seed = int(data.get("run_seed", run_seed))
+	rng_state = int(data.get("rng_state", run_seed))
+	if run_seed != 0:
+		_init_rng(run_seed)
+		if rng_state != 0:
+			seed(rng_state)
 
 	var stats_any: Variant = data.get("run_stats", {})
 	if typeof(stats_any) == TYPE_DICTIONARY:

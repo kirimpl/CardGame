@@ -93,7 +93,11 @@ var player_status_signature: String = ""
 var combat_log_panel: PanelContainer = null
 var combat_log_text: RichTextLabel = null
 var combat_log_toggle_btn: Button = null
+var combat_log_filter: OptionButton = null
 var save_exit_btn: Button = null
+var damage_preview_label: Label = null
+var last_player_hp_display: int = -1
+var last_player_block_display: int = -1
 
 
 func _ready() -> void:
@@ -107,6 +111,7 @@ func _ready() -> void:
 	_setup_player_status_row()
 	_setup_status_tooltip()
 	_setup_combat_log_ui()
+	_setup_damage_preview_ui()
 	_setup_save_exit_button()
 	_bind_pile_label_events()
 
@@ -213,6 +218,10 @@ func _update_ui() -> void:
 
 	var p_hp: int = int(RunManager.current_hp)
 	var p_max: int = int(RunManager.max_hp)
+	var hp_changed: bool = (last_player_hp_display != -1 and last_player_hp_display != p_hp)
+	var block_changed: bool = (last_player_block_display != -1 and last_player_block_display != player_defense)
+	last_player_hp_display = p_hp
+	last_player_block_display = player_defense
 	var p_ratio: float = float(p_hp) / float(max(1, p_max))
 	if ui_player_bar_fill != null and ui_player_bar_back != null:
 		ui_player_bar_fill.size.x = ui_player_bar.size.x * p_ratio
@@ -225,6 +234,8 @@ func _update_ui() -> void:
 			ui_player_bar_back.color = Color(0.35, 0.1, 0.1, 1)
 			ui_player_bar_fill.color = Color(0.8, 0.2, 0.2, 1)
 			ui_player_bar_text.text = "HP %d/%d" % [p_hp, p_max]
+		if hp_changed or block_changed:
+			_flash_label(ui_player_bar_text)
 
 	var focus_enemy: Node2D = _get_primary_enemy()
 	if focus_enemy != null:
@@ -335,19 +346,40 @@ func _append_combat_log(text: String) -> void:
 	_refresh_combat_log_ui()
 
 
+func _guess_log_category(action: String, actor: String) -> String:
+	var a: String = action.strip_edges().to_lower()
+	var who: String = actor.strip_edges().to_lower()
+	if a.find("damage") != -1 or a.find("attack") != -1:
+		return "DAMAGE"
+	if a.find("effect") != -1 or a.find("buff") != -1 or a.find("debuff") != -1:
+		return "EFFECT"
+	if who == "system":
+		return "SYSTEM"
+	return "SYSTEM"
+
+
 func _log_turn_action(actor: String, action: String, result: String) -> void:
-	_append_combat_log("Turn %d | %s | %s | %s" % [turn_number, actor, action, result])
+	var category: String = _guess_log_category(action, actor)
+	RunManager.log_combat_event(category, actor, action, result, turn_number)
+	_refresh_combat_log_ui()
 
 
 func _refresh_combat_log_ui() -> void:
 	if combat_log_text == null:
 		return
 	combat_log_text.clear()
-	var lines: PackedStringArray = RunManager.get_combat_log_tail(16)
-	if lines.is_empty():
-		lines.append("No entries yet")
-	for line in lines:
-		combat_log_text.append_text(line + "\n")
+	var filter_value: String = "ALL"
+	if combat_log_filter != null:
+		filter_value = combat_log_filter.get_item_text(combat_log_filter.selected)
+	var events: Array[Dictionary] = RunManager.get_combat_events_tail(24, filter_value)
+	if events.is_empty():
+		combat_log_text.append_text("No entries yet\n")
+	for event_dict in events:
+		var ev_turn: int = int(event_dict.get("turn", 0))
+		var ev_actor: String = str(event_dict.get("actor", "System"))
+		var ev_action: String = str(event_dict.get("action", ""))
+		var ev_result: String = str(event_dict.get("result", ""))
+		combat_log_text.append_text("Turn %d | %s | %s | %s\n" % [ev_turn, ev_actor, ev_action, ev_result])
 	combat_log_text.scroll_to_line(combat_log_text.get_line_count())
 
 
@@ -524,6 +556,14 @@ func _setup_combat_log_ui() -> void:
 	title.add_theme_color_override("font_color", Color(0.93, 0.94, 0.98, 1.0))
 	vbox.add_child(title)
 
+	combat_log_filter = OptionButton.new()
+	combat_log_filter.add_item("ALL")
+	combat_log_filter.add_item("DAMAGE")
+	combat_log_filter.add_item("EFFECT")
+	combat_log_filter.add_item("SYSTEM")
+	combat_log_filter.item_selected.connect(_on_combat_log_filter_changed)
+	vbox.add_child(combat_log_filter)
+
 	var scroll: ScrollContainer = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(scroll)
@@ -541,6 +581,23 @@ func _setup_combat_log_ui() -> void:
 	_refresh_combat_log_ui()
 
 
+func _setup_damage_preview_ui() -> void:
+	damage_preview_label = Label.new()
+	damage_preview_label.name = "DamagePreviewLabel"
+	damage_preview_label.anchor_left = 0.5
+	damage_preview_label.anchor_top = 0.0
+	damage_preview_label.anchor_right = 0.5
+	damage_preview_label.anchor_bottom = 0.0
+	damage_preview_label.offset_left = -220.0
+	damage_preview_label.offset_top = 88.0
+	damage_preview_label.offset_right = 220.0
+	damage_preview_label.offset_bottom = 116.0
+	damage_preview_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	damage_preview_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55, 1.0))
+	damage_preview_label.visible = false
+	ui_root.add_child(damage_preview_label)
+
+
 func _on_combat_log_toggle_pressed() -> void:
 	if combat_log_panel == null:
 		return
@@ -549,6 +606,10 @@ func _on_combat_log_toggle_pressed() -> void:
 		combat_log_toggle_btn.text = "Hide Log" if combat_log_panel.visible else "Show Log"
 	if combat_log_panel.visible:
 		_refresh_combat_log_ui()
+
+
+func _on_combat_log_filter_changed(_idx: int) -> void:
+	_refresh_combat_log_ui()
 
 
 func _setup_save_exit_button() -> void:
@@ -703,7 +764,7 @@ func _setup_deck() -> void:
 	for deck_card in RunManager.deck:
 		if deck_card != null:
 			RunManager.mark_card_seen(deck_card.id)
-	draw_pile.shuffle()
+	_shuffle_cards(draw_pile)
 
 
 func _duplicate_cards(cards: Array[CardData]) -> Array[CardData]:
@@ -716,6 +777,14 @@ func _duplicate_cards(cards: Array[CardData]) -> Array[CardData]:
 		RunManager.apply_relic_card_modifiers(final_card)
 		out.append(final_card)
 	return out
+
+
+func _shuffle_cards(cards: Array[CardData]) -> void:
+	for i in range(cards.size() - 1, 0, -1):
+		var j: int = RunManager.rolli_range_run(0, i)
+		var tmp: CardData = cards[i]
+		cards[i] = cards[j]
+		cards[j] = tmp
 
 
 func _start_turn() -> void:
@@ -748,7 +817,7 @@ func _draw_cards(count: int) -> void:
 			if discard_pile.is_empty():
 				break
 			draw_pile = discard_pile.duplicate()
-			draw_pile.shuffle()
+			_shuffle_cards(draw_pile)
 			discard_pile.clear()
 		hand.append(draw_pile.pop_back())
 	await get_tree().process_frame
@@ -912,7 +981,7 @@ func _apply_post_play_manipulation(card: CardData) -> void:
 	for _i in range(discard_count):
 		if hand.is_empty():
 			break
-		var idx_discard: int = randi_range(0, hand.size() - 1)
+		var idx_discard: int = RunManager.rolli_range_run(0, hand.size() - 1)
 		discard_pile.append(hand[idx_discard])
 		hand.remove_at(idx_discard)
 
@@ -920,7 +989,7 @@ func _apply_post_play_manipulation(card: CardData) -> void:
 	for _i in range(exhaust_count):
 		if hand.is_empty():
 			break
-		var idx_exhaust: int = randi_range(0, hand.size() - 1)
+		var idx_exhaust: int = RunManager.rolli_range_run(0, hand.size() - 1)
 		exhaust_pile.append(hand[idx_exhaust])
 		hand.remove_at(idx_exhaust)
 
@@ -940,7 +1009,7 @@ func _on_enemy_dead() -> void:
 	if RunManager.current_enemy_data != null:
 		g_min = int(RunManager.current_enemy_data.min_gold)
 		g_max = int(RunManager.current_enemy_data.max_gold)
-	var rolled_gold: int = randi_range(g_min, g_max)
+	var rolled_gold: int = RunManager.rolli_range_run(g_min, g_max)
 	if RunManager.current_enemy_is_elite:
 		rolled_gold = int(round(float(rolled_gold) * RunManager.elite_gold_multiplier))
 	rolled_gold = int(round(float(rolled_gold) * RunManager.get_floor_gold_multiplier(RunManager.current_floor)))
@@ -1108,6 +1177,7 @@ func _get_enemy_pick_position(enemy_instance: Node2D) -> Vector2:
 
 func _process(_delta: float) -> void:
 	_refresh_target_highlight()
+	_refresh_damage_preview()
 
 
 func _refresh_target_highlight() -> void:
@@ -1134,6 +1204,32 @@ func _clear_target_highlight() -> void:
 			e.modulate = Color.WHITE
 
 
+func _refresh_damage_preview() -> void:
+	if damage_preview_label == null:
+		return
+	if pending_target_card == null:
+		damage_preview_label.visible = false
+		return
+	var card_damage: int = pending_target_card.get_damage()
+	if card_damage <= 0:
+		damage_preview_label.visible = false
+		return
+	var target: Node2D = target_preview_enemy
+	if target == null:
+		target = _get_primary_enemy()
+	if target == null:
+		damage_preview_label.visible = false
+		return
+	var outgoing_mult: float = _get_player_outgoing_damage_multiplier()
+	var bonus: int = _get_player_effect_value("strength_surge")
+	var predicted: int = max(0, int(round(float(card_damage + bonus) * outgoing_mult)))
+	var target_name: String = "Enemy"
+	if "data" in target and target.data != null:
+		target_name = str(target.data.name)
+	damage_preview_label.text = "Preview: %s will take %d" % [target_name, predicted]
+	damage_preview_label.visible = true
+
+
 func _get_player_popup_position() -> Vector2:
 	if is_instance_valid(player):
 		return player.global_position + Vector2(0.0, -72.0)
@@ -1158,11 +1254,19 @@ func _spawn_damage_popup(world_pos: Vector2, value: int, is_damage: bool) -> voi
 	tween.finished.connect(popup.queue_free)
 
 
+func _flash_label(label: Label) -> void:
+	if label == null:
+		return
+	var tw: Tween = create_tween()
+	tw.tween_property(label, "modulate", Color(1.0, 0.94, 0.58, 1.0), 0.09)
+	tw.tween_property(label, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.12)
+
+
 func _roll_player_miss_taken() -> bool:
 	var miss: int = _get_player_miss_chance_percent()
 	if miss <= 0:
 		return false
-	return randi_range(1, 100) <= clampi(miss, 0, 95)
+	return RunManager.rolli_range_run(1, 100) <= clampi(miss, 0, 95)
 
 
 func _get_player_miss_chance_percent() -> int:

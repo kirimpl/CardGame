@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="RelicData" format=3]
+
+[ext_resource type="Script" path="res://Relic/RelicData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "warden_seal"
+title = "Warden Seal"
+description = "Defense cards cost 1 less (min 0)."
+rarity = 2
+unlock_level = 5
+use_card_type_filter = true
+card_type_filter = 1
+cost_delta = -1

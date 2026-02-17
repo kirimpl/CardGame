@@ -10,6 +10,7 @@ const EVENT_DEFS: Array[Dictionary] = [
 @onready var relics_list: VBoxContainer = $Root/Panel/Margin/Content/Tabs/Relics/Scroll/List
 @onready var enemies_list: VBoxContainer = $Root/Panel/Margin/Content/Tabs/Enemies/Scroll/List
 @onready var events_list: VBoxContainer = $Root/Panel/Margin/Content/Tabs/Events/Scroll/List
+@onready var history_list: VBoxContainer = $Root/Panel/Margin/Content/Tabs/History/Scroll/List
 @onready var level_label: Label = $Root/Panel/Margin/Content/TopRow/ProfilePanel/ProfileMargin/ProfileVBox/LevelLabel
 @onready var xp_label: Label = $Root/Panel/Margin/Content/TopRow/ProfilePanel/ProfileMargin/ProfileVBox/XPLabel
 @onready var next_unlock_label: Label = $Root/Panel/Margin/Content/TopRow/ProfilePanel/ProfileMargin/ProfileVBox/NextUnlockLabel
@@ -35,6 +36,7 @@ func _refresh_all_lists() -> void:
 	_fill_relics()
 	_fill_enemies()
 	_fill_events()
+	_fill_history()
 
 
 func _refresh_profile_block() -> void:
@@ -143,6 +145,38 @@ func _fill_events() -> void:
 		if show_known_only and not seen:
 			continue
 		_add_entry(events_list, str(ev.get("title", "Event")) if seen else "Unknown Event", str(ev.get("desc", "???")) if seen else "???", seen)
+
+
+func _fill_history() -> void:
+	_clear_list(history_list)
+	var save_node: Node = get_node_or_null("/root/SaveSystem")
+	if save_node == null or not save_node.has_method("get_run_history"):
+		_add_entry(history_list, "Run History", "Unavailable", true)
+		return
+	var rows_variant: Variant = save_node.call("get_run_history", 30)
+	if not (rows_variant is Array):
+		_add_entry(history_list, "Run History", "No data", true)
+		return
+	var rows: Array = rows_variant
+	if rows.is_empty():
+		_add_entry(history_list, "Run History", "No runs yet", true)
+		return
+	for i in range(rows.size() - 1, -1, -1):
+		var row_any: Variant = rows[i]
+		if typeof(row_any) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_any as Dictionary
+		var victory: bool = bool(row.get("victory", false))
+		var floor_reached: int = int(row.get("floor_reached", 0))
+		var xp_gain: int = int(row.get("xp_gain", 0))
+		var seed_value: int = int(row.get("run_seed", 0))
+		var reason: String = str(row.get("reason", "-"))
+		var stats: Dictionary = row.get("stats", {}) as Dictionary
+		var turns: int = int(round(float(stats.get("turns_spent", 0.0))))
+		var fights: int = int(round(float(stats.get("fights_won", 0.0))))
+		var title: String = ("Victory" if victory else "Defeat") + " | Floor " + str(floor_reached)
+		var desc: String = "Reason: %s\nXP: %d | Fights: %d | Turns: %d | Seed: %d" % [reason, xp_gain, fights, turns, seed_value]
+		_add_entry(history_list, title, desc, true)
 
 
 func _add_entry(parent: VBoxContainer, title: String, desc: String, known: bool) -> void:

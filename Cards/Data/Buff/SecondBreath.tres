@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Resource" path="res://Cards/Effects/Regeneration.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "second_breath"
+title = "Second Breath"
+description = "Gain Regeneration (1). Exhaust."
+cost = 1
+exhaust = true
+rarity = 1
+unlock_level = 3
+buff_kind = 2
+buff_charges = 1
+buff_effect = ExtResource("2")
+buff_effect_durability = 1
+upgraded_cost = 0
+upgraded_buff_charges = 2

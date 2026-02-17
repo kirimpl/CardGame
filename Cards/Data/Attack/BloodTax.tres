@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Resource" path="res://Cards/Effects/Bleed.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "blood_tax"
+title = "Blood Tax"
+description = "Deal 7 damage. Apply Bleed (2)."
+cost = 1
+damage = 7
+effect = ExtResource("2")
+effect_durability = 2
+rarity = 1
+unlock_level = 3
+upgraded_damage = 9
+upgraded_effect_durability = 3
