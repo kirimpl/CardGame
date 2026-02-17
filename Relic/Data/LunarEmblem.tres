@@ -4,13 +4,13 @@
 
 [resource]
 script = ExtResource("1")
-id = "night_fang"
-title = "Night Fang"
-description = "At night only: attack cards deal +2 damage."
+id = "lunar_emblem"
+title = "Lunar Emblem"
+description = "Night only: gain +8 max HP and +1 attack card damage."
 rarity = 2
-unlock_level = 4
+unlock_level = 6
 active_time = 2
-card_id_filters = PackedStringArray()
+max_hp_bonus = 8
 use_card_type_filter = true
 card_type_filter = 0
-attack_damage_bonus = 2
+attack_damage_bonus = 1

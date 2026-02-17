@@ -8,4 +8,5 @@ id = "tempered_tongs"
 title = "Tempered Tongs"
 description = "Smith upgrade cost is reduced by 25%."
 rarity = 1
+unlock_level = 4
 smith_discount_percent = 0.25

@@ -8,5 +8,5 @@ id = "heavy_slash"
 title = "Heavy Slash"
 description = "Deal 15 damage."
 cost = 2
-damage = 15
+damage = 14
 rarity = 1

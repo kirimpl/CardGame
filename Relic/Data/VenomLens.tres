@@ -8,5 +8,6 @@ id = "venom_lens"
 title = "Venom Lens"
 description = "Smoke Screen and Intercept Mark duration +1."
 rarity = 1
+unlock_level = 5
 card_id_filters = PackedStringArray("smoke_screen", "intercept_mark")
 effect_durability_bonus = 1

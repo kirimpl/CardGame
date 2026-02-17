@@ -8,5 +8,6 @@ id = "iron_wall"
 title = "Iron Wall"
 description = "Gain 14 block."
 cost = 2
-defense = 14
+defense = 13
 rarity = 1
+unlock_level = 4

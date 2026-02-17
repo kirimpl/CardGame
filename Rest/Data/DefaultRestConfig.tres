@@ -4,11 +4,11 @@
 
 [resource]
 script = ExtResource("1")
-merchant_card_price_common = 40
-merchant_card_price_uncommon = 60
-merchant_card_price_rare = 90
-merchant_card_price_legendary = 130
-merchant_relic_price_common = 95
-merchant_relic_price_uncommon = 140
-merchant_relic_price_rare = 210
-merchant_relic_price_legendary = 300
+merchant_card_price_common = 35
+merchant_card_price_uncommon = 52
+merchant_card_price_rare = 78
+merchant_card_price_legendary = 115
+merchant_relic_price_common = 85
+merchant_relic_price_uncommon = 125
+merchant_relic_price_rare = 185
+merchant_relic_price_legendary = 260

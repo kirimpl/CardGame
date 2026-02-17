@@ -8,4 +8,5 @@ id = "haggle_charm"
 title = "Haggle Charm"
 description = "Merchant prices are reduced by 20%."
 rarity = 2
+unlock_level = 3
 merchant_discount_percent = 0.2

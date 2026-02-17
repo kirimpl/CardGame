@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="RelicData" format=3]
+
+[ext_resource type="Script" path="res://Relic/RelicData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "warden_band"
+title = "Warden Band"
+description = "Defense cards gain +2 block. Campfire heals +10%."
+rarity = 1
+unlock_level = 5
+campfire_heal_bonus_percent = 0.1
+use_card_type_filter = true
+card_type_filter = 1
+defense_bonus = 2

@@ -22,6 +22,7 @@ enum Rarity { COMMON, UNCOMMON, RARE, LEGENDARY }
 @export var rarity: Rarity = Rarity.COMMON
 @export var can_appear_in_rewards: bool = true
 @export var can_appear_in_merchant: bool = true
+@export_range(1, 99, 1) var unlock_level: int = 1
 
 @export_group("Buff")
 @export var buff_kind: BuffKind = BuffKind.NONE

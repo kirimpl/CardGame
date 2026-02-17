@@ -1,0 +1,125 @@
+[gd_scene load_steps=2 format=3 uid="uid://djg3r87jp1t0q"]
+
+[ext_resource type="Script" path="res://UI/map_screen.gd" id="1_u6j6g"]
+
+[node name="MapScreen" type="CanvasLayer"]
+script = ExtResource("1_u6j6g")
+
+[node name="Root" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Backdrop" type="ColorRect" parent="Root"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.1, 0.09, 0.95)
+
+[node name="Main" type="PanelContainer" parent="Root"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 42.0
+offset_top = 24.0
+offset_right = -42.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="Root/Main"]
+layout_mode = 2
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="Content" type="VBoxContainer" parent="Root/Main/Margin"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="Top" type="VBoxContainer" parent="Root/Main/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Title" type="Label" parent="Root/Main/Margin/Content/Top"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 34
+text = "Act Map"
+horizontal_alignment = 1
+
+[node name="SubTitle" type="Label" parent="Root/Main/Margin/Content/Top"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Choose your next floor"
+horizontal_alignment = 1
+
+[node name="MapSplit" type="HBoxContainer" parent="Root/Main/Margin/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="MapPane" type="PanelContainer" parent="Root/Main/Margin/Content/MapSplit"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="MapCanvas" type="Control" parent="Root/Main/Margin/Content/MapSplit/MapPane"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="LinesLayer" type="Control" parent="Root/Main/Margin/Content/MapSplit/MapPane/MapCanvas"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="NodesLayer" type="Control" parent="Root/Main/Margin/Content/MapSplit/MapPane/MapCanvas"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="LegendPane" type="PanelContainer" parent="Root/Main/Margin/Content/MapSplit"]
+layout_mode = 2
+custom_minimum_size = Vector2(240, 0)
+
+[node name="LegendMargin" type="MarginContainer" parent="Root/Main/Margin/Content/MapSplit/LegendPane"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="LegendRows" type="VBoxContainer" parent="Root/Main/Margin/Content/MapSplit/LegendPane/LegendMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Bottom" type="HBoxContainer" parent="Root/Main/Margin/Content"]
+layout_mode = 2
+alignment = 1
+
+[node name="BackButton" type="Button" parent="Root/Main/Margin/Content/Bottom"]
+layout_mode = 2
+custom_minimum_size = Vector2(130, 36)
+size_flags_horizontal = 0
+text = "Back"
+
+[connection signal="pressed" from="Root/Main/Margin/Content/Bottom/BackButton" to="." method="_on_back_pressed"]

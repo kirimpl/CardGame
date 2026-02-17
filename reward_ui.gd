@@ -200,11 +200,15 @@ func _pick_card_of_rarity(pool: Array[CardData], rarity: CardData.Rarity) -> Car
 
 func _filter_reward_cards(source: Array[CardData]) -> Array[CardData]:
 	var out: Array[CardData] = []
+	var meta: Node = get_node_or_null("/root/MetaProgression")
 	for card in source:
 		if card == null:
 			continue
 		if not card.can_appear_in_rewards:
 			continue
+		if meta != null and meta.has_method("is_card_unlocked"):
+			if not bool(meta.call("is_card_unlocked", card)):
+				continue
 		out.append(card)
 	return out
 
@@ -223,6 +227,7 @@ func _on_card_selected(data: CardData) -> void:
 	if selected_copy == null:
 		selected_copy = data
 	RunManager.deck.append(selected_copy)
+	RunManager.mark_card_seen(selected_copy.id)
 	_finish_reward()
 
 func _on_skip_pressed() -> void:

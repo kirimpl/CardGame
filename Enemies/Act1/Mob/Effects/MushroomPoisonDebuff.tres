@@ -6,6 +6,6 @@
 [resource]
 script = ExtResource("1")
 effect = ExtResource("2")
-duration = 2
+duration = 1
 stacks = 1
-chance_percent = 70
+chance_percent = 60

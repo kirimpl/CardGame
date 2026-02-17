@@ -1,27 +1,41 @@
 extends Node
 
+const ROOM_ENEMY: String = "ENEMY"
+const ROOM_ELITE: String = "ELITE"
+const ROOM_REST: String = "REST"
+const ROOM_EVENT: String = "EVENT"
+const ROOM_TREASURE: String = "TREASURE"
+const ROOM_MERCHANT: String = "MERCHANT"
+const ROOM_BOSS: String = "BOSS"
+
 @export_group("Run Defaults")
 @export var start_floor: int = 1
 @export var start_act: int = 1
-@export var start_gold: int = 0
+@export var start_gold: int = 15
 @export var base_max_hp: int = 88
 @export_range(1, 20, 1) var battle_speed_min: int = 1
 @export_range(1, 20, 1) var battle_speed_max: int = 5
 @export_range(1, 100, 1) var floors_per_act: int = 9
 @export_range(1, 100, 1) var boss_floor: int = 10
-@export_range(0.0, 1.0, 0.01) var elite_chance: float = 0.20
+@export_range(1, 10, 1) var total_acts: int = 3
+@export_range(1.0, 5.0, 0.1) var final_victory_xp_multiplier: float = 2.0
+@export_range(0.0, 1.0, 0.01) var elite_chance: float = 0.17
 @export_range(1.0, 5.0, 0.05) var elite_gold_multiplier: float = 1.65
 @export_range(0.5, 1.5, 0.01) var early_floor_gold_multiplier: float = 0.85
 @export_range(0.5, 1.5, 0.01) var mid_floor_gold_multiplier: float = 0.93
-@export_range(0.0, 1.0, 0.01) var multi_enemy_chance: float = 0.35
+@export_range(0.0, 1.0, 0.01) var multi_enemy_chance: float = 0.30
 @export_range(2, 4, 1) var multi_enemy_max_count: int = 2
 @export var starting_relics: Array[RelicData] = []
 @export var guaranteed_rest_floors: PackedInt32Array = PackedInt32Array([5, 9])
 @export_file("*.tscn") var level_scene_path: String = "res://level.tscn"
 @export_file("*.tscn") var rest_room_scene_path: String = "res://level.tscn"
-@export_range(0.0, 1.0, 0.01) var campfire_heal_percent: float = 0.35
-@export_range(1.0, 3.0, 0.05) var night_enemy_hp_multiplier: float = 1.20
-@export_range(1.0, 3.0, 0.05) var night_enemy_damage_multiplier: float = 1.15
+@export_range(0.0, 1.0, 0.01) var campfire_heal_percent: float = 0.40
+@export_range(1.0, 3.0, 0.05) var night_enemy_hp_multiplier: float = 1.15
+@export_range(1.0, 3.0, 0.05) var night_enemy_damage_multiplier: float = 1.10
+@export_file("*.tscn") var map_scene_path: String = "res://UI/map_screen.tscn"
+@export_file("*.tscn") var run_result_scene_path: String = "res://UI/run_result.tscn"
+@export_range(2, 6, 1) var map_lane_count: int = 3
+@export_range(1, 3, 1) var map_branch_width: int = 1
 
 var current_floor: int = 1
 var current_act: int = 1
@@ -40,6 +54,15 @@ var consumed_one_shot_relic_indices: Dictionary = {}
 var used_smith_free_upgrades: int = 0
 var merchant_purge_count: int = 0
 var is_night: bool = false
+var forced_room_type: String = ""
+var map_nodes: Dictionary = {}
+var map_edges: Array[Dictionary] = []
+var map_lane_profiles: Dictionary = {}
+var map_generated_act: int = -1
+var current_map_lane: int = 1
+var combat_log: Array[String] = []
+var run_stats: Dictionary = {}
+var last_run_summary: Dictionary = {}
 
 var normal_enemies: Array[EnemyData] = []
 var elite_enemies: Array[EnemyData] = []
@@ -219,21 +242,34 @@ func start_new_run() -> void:
 	consumed_one_shot_relic_indices.clear()
 	used_smith_free_upgrades = 0
 	merchant_purge_count = 0
+	forced_room_type = ""
+	map_nodes.clear()
+	map_edges.clear()
+	map_lane_profiles.clear()
+	map_generated_act = -1
+	current_map_lane = clampi(current_map_lane, 0, max(0, map_lane_count - 1))
+	combat_log.clear()
+	last_run_summary.clear()
+	run_stats = {
+		"fights_won": 0,
+		"fights_lost": 0,
+		"turns_spent": 0,
+		"effects_applied": 0,
+		"effect_damage": 0,
+		"healing_done": 0,
+		"damage_dealt": 0,
+		"damage_taken": 0,
+	}
 	bootstrap_starting_relics_from_fight_scene()
 	apply_starting_relics()
+	log_combat("Run started. Floor %d" % current_floor)
 
 
 func next_floor() -> void:
-	current_floor += 1
-	current_enemy_is_elite = false
-	returning_from_fight = false
-	reward_claimed = false
-
-	if current_floor > floors_per_act:
-		current_floor = start_floor
-		current_act += 1
-
-	get_tree().call_deferred("change_scene_to_file", get_scene_for_floor(current_floor))
+	if current_floor >= boss_floor:
+		finish_run(true, "Boss defeated")
+		return
+	get_tree().call_deferred("change_scene_to_file", map_scene_path)
 
 
 func is_rest_floor(floor: int) -> bool:
@@ -241,12 +277,22 @@ func is_rest_floor(floor: int) -> bool:
 
 
 func get_scene_for_floor(floor: int) -> String:
+	if forced_room_type == ROOM_REST:
+		return rest_room_scene_path
+	if forced_room_type == ROOM_BOSS:
+		return level_scene_path
 	if is_rest_floor(floor):
 		return rest_room_scene_path
 	return level_scene_path
 
 
 func get_enemy_difficulty() -> String:
+	if forced_room_type == ROOM_ELITE:
+		return "ELITE"
+	if forced_room_type == ROOM_BOSS:
+		return "BOSS"
+	if forced_room_type == ROOM_ENEMY:
+		return "NORMAL"
 	if current_floor <= 2:
 		return "NORMAL"
 	if current_floor == boss_floor:
@@ -259,6 +305,306 @@ func get_enemy_difficulty() -> String:
 func toggle_day_night() -> void:
 	is_night = not is_night
 	_recalculate_derived_stats()
+
+
+func log_combat(entry: String) -> void:
+	var text: String = entry.strip_edges()
+	if text == "":
+		return
+	combat_log.append(text)
+	if combat_log.size() > 180:
+		combat_log.remove_at(0)
+
+
+func get_combat_log_tail(max_entries: int = 40) -> PackedStringArray:
+	var count: int = clampi(max_entries, 1, 180)
+	var out: PackedStringArray = PackedStringArray()
+	var start_idx: int = max(0, combat_log.size() - count)
+	for i in range(start_idx, combat_log.size()):
+		out.append(combat_log[i])
+	return out
+
+
+func add_run_stat(key: String, delta: float) -> void:
+	var prev: float = float(run_stats.get(key, 0.0))
+	run_stats[key] = prev + delta
+
+
+func build_floor_map_nodes(floor: int) -> Array[Dictionary]:
+	_ensure_map_generated()
+	if map_nodes.has(floor):
+		return map_nodes[floor]
+	return []
+
+
+func get_map_edges() -> Array[Dictionary]:
+	_ensure_map_generated()
+	return map_edges
+
+
+func get_reachable_lanes_for_floor(floor: int) -> PackedInt32Array:
+	_ensure_map_generated()
+	var lanes: PackedInt32Array = PackedInt32Array()
+	if floor != current_floor + 1:
+		return lanes
+	for edge in map_edges:
+		if int(edge.get("from_floor", -1)) != current_floor:
+			continue
+		if int(edge.get("from_lane", -1)) != current_map_lane:
+			continue
+		if int(edge.get("to_floor", -1)) != floor:
+			continue
+		var to_lane: int = int(edge.get("to_lane", -1))
+		if to_lane >= 0 and not lanes.has(to_lane):
+			lanes.append(to_lane)
+	if lanes.is_empty():
+		var nodes: Array[Dictionary] = build_floor_map_nodes(floor)
+		for n in nodes:
+			var lane: int = int(n.get("lane", -1))
+			if lane >= 0:
+				lanes.append(lane)
+	return lanes
+
+
+func travel_to_room(floor: int, lane: int, room_type: String) -> void:
+	_ensure_map_generated()
+	if floor != current_floor + 1:
+		return
+	if not get_reachable_lanes_for_floor(floor).has(lane):
+		return
+	current_floor = floor
+	current_map_lane = clampi(lane, 0, max(0, map_lane_count - 1))
+	forced_room_type = room_type
+	current_enemy_is_elite = (room_type == ROOM_ELITE)
+	returning_from_fight = false
+	reward_claimed = false
+	log_combat("Travel: floor %d -> %s" % [current_floor, room_type])
+	get_tree().call_deferred("change_scene_to_file", get_scene_for_floor(current_floor))
+
+
+func consume_forced_room_type() -> String:
+	var out: String = forced_room_type
+	forced_room_type = ""
+	return out
+
+
+func _roll_room_type_for_floor(floor: int, lane: int) -> String:
+	if floor >= boss_floor:
+		return ROOM_BOSS
+	if is_rest_floor(floor):
+		return ROOM_REST
+
+	var profile: String = str(map_lane_profiles.get(lane, "combat"))
+	var weights: Dictionary = {}
+	match profile:
+		"elite":
+			weights = {ROOM_ENEMY: 0.48, ROOM_ELITE: 0.26, ROOM_EVENT: 0.10, ROOM_TREASURE: 0.08, ROOM_MERCHANT: 0.08}
+		"utility":
+			weights = {ROOM_ENEMY: 0.38, ROOM_ELITE: 0.10, ROOM_EVENT: 0.22, ROOM_TREASURE: 0.14, ROOM_MERCHANT: 0.16}
+		_:
+			weights = {ROOM_ENEMY: 0.60, ROOM_ELITE: 0.16, ROOM_EVENT: 0.12, ROOM_TREASURE: 0.08, ROOM_MERCHANT: 0.04}
+
+	if floor <= 2:
+		weights[ROOM_ELITE] = 0.0
+		weights[ROOM_MERCHANT] = 0.02
+
+	return _pick_weighted_room(weights)
+
+
+func _pick_weighted_room(weights: Dictionary) -> String:
+	var total: float = 0.0
+	for key in weights.keys():
+		total += maxf(0.0, float(weights[key]))
+	if total <= 0.0:
+		return ROOM_ENEMY
+	var roll: float = randf() * total
+	for key in weights.keys():
+		roll -= maxf(0.0, float(weights[key]))
+		if roll <= 0.0:
+			return str(key)
+	return ROOM_ENEMY
+
+
+func _ensure_map_generated() -> void:
+	if map_generated_act == current_act and not map_nodes.is_empty():
+		return
+
+	map_nodes.clear()
+	map_edges.clear()
+	map_lane_profiles.clear()
+	map_generated_act = current_act
+
+	var lanes: int = max(3, map_lane_count)
+	current_map_lane = clampi(current_map_lane, 0, lanes - 1)
+	for lane in range(lanes):
+		var profile: String = "combat"
+		var r: int = randi_range(0, 2)
+		if r == 1:
+			profile = "elite"
+		elif r == 2:
+			profile = "utility"
+		map_lane_profiles[lane] = profile
+
+	map_nodes[current_floor] = [{
+		"floor": current_floor,
+		"lane": current_map_lane,
+		"room_type": "CURRENT",
+	}]
+
+	var prev_lanes: PackedInt32Array = PackedInt32Array([current_map_lane])
+	for floor in range(current_floor + 1, boss_floor + 1):
+		var floor_nodes: Array[Dictionary] = []
+		var lanes_this_floor: PackedInt32Array = PackedInt32Array()
+
+		if floor == boss_floor:
+			lanes_this_floor.append(lanes / 2)
+		else:
+			var path_progress: float = float(floor - current_floor) / float(max(1, boss_floor - current_floor))
+			var desired_width: int = clampi(int(round(lerpf(float(lanes), 2.0, path_progress) + randf_range(-1.0, 1.0))), 2, lanes)
+			var lane_set: Dictionary = {}
+			for pl in prev_lanes:
+				lane_set[clampi(int(pl) + randi_range(-1, 1), 0, lanes - 1)] = true
+				if randf() < 0.35:
+					lane_set[clampi(int(pl) + randi_range(-2, 2), 0, lanes - 1)] = true
+			while lane_set.size() < desired_width:
+				lane_set[randi_range(0, lanes - 1)] = true
+			var lane_arr: Array = lane_set.keys()
+			lane_arr.sort()
+			while lane_arr.size() > desired_width:
+				lane_arr.remove_at(randi_range(0, lane_arr.size() - 1))
+			for l in lane_arr:
+				lanes_this_floor.append(int(l))
+
+		for lane in lanes_this_floor:
+			floor_nodes.append({
+				"floor": floor,
+				"lane": lane,
+				"room_type": _roll_room_type_for_floor(floor, lane),
+			})
+		map_nodes[floor] = floor_nodes
+
+		for pl in prev_lanes:
+			var choices: Array[int] = []
+			for tl in lanes_this_floor:
+				choices.append(int(tl))
+			choices.sort_custom(func(a: int, b: int) -> bool:
+				return abs(a - int(pl)) < abs(b - int(pl))
+			)
+			if choices.is_empty():
+				continue
+			var primary: int = choices[0]
+			map_edges.append({"from_floor": floor - 1, "from_lane": int(pl), "to_floor": floor, "to_lane": primary})
+			if choices.size() > 1 and randf() < 0.33:
+				var idx: int = min(choices.size() - 1, randi_range(1, min(2, choices.size() - 1)))
+				map_edges.append({"from_floor": floor - 1, "from_lane": int(pl), "to_floor": floor, "to_lane": choices[idx]})
+
+		for tl in lanes_this_floor:
+			var has_incoming: bool = false
+			for edge in map_edges:
+				if int(edge.get("to_floor", -1)) == floor and int(edge.get("to_lane", -1)) == int(tl):
+					has_incoming = true
+					break
+			if has_incoming:
+				continue
+			var nearest_prev: int = int(prev_lanes[0])
+			var best_dist: int = abs(nearest_prev - int(tl))
+			for pl in prev_lanes:
+				var dist: int = abs(int(pl) - int(tl))
+				if dist < best_dist:
+					best_dist = dist
+					nearest_prev = int(pl)
+			map_edges.append({"from_floor": floor - 1, "from_lane": nearest_prev, "to_floor": floor, "to_lane": int(tl)})
+
+		prev_lanes = lanes_this_floor
+
+
+func finish_run(victory: bool, reason: String) -> void:
+	var floor_bonus: int = max(0, current_floor - 1) * 12
+	var fight_bonus: int = int(run_stats.get("fights_won", 0.0)) * 16
+	var effect_bonus: int = int(round(float(run_stats.get("effects_applied", 0.0)) * 1.5))
+	var dot_bonus: int = int(round(float(run_stats.get("effect_damage", 0.0)) * 0.3))
+	var heal_bonus: int = int(round(float(run_stats.get("healing_done", 0.0)) * 0.35))
+	var tempo_bonus: int = max(0, 90 - int(run_stats.get("turns_spent", 0.0)))
+	var victory_bonus: int = 140 if victory else 0
+	var xp_gain: int = max(25, 40 + floor_bonus + fight_bonus + effect_bonus + dot_bonus + heal_bonus + tempo_bonus + victory_bonus)
+	if victory and current_act >= total_acts and current_floor >= boss_floor:
+		xp_gain = int(round(float(xp_gain) * final_victory_xp_multiplier))
+
+	var xp_result: Dictionary = {}
+	if has_node("/root/MetaProgression"):
+		var meta_node: Node = get_node("/root/MetaProgression")
+		if meta_node.has_method("add_xp"):
+			xp_result = meta_node.call("add_xp", xp_gain)
+
+	last_run_summary = {
+		"victory": victory,
+		"reason": reason,
+		"floor_reached": current_floor,
+		"gold": gold,
+		"stats": run_stats.duplicate(true),
+		"xp_gain": xp_gain,
+		"xp_result": xp_result,
+		"deck_size": deck.size(),
+		"relic_count": relics.size(),
+	}
+	log_combat("Run finished: %s (floor %d)" % [reason, current_floor])
+	get_tree().call_deferred("change_scene_to_file", run_result_scene_path)
+
+
+func on_boss_defeated() -> bool:
+	if current_act >= total_acts:
+		finish_run(true, "Final boss defeated")
+		return true
+	current_act += 1
+	current_floor = start_floor
+	forced_room_type = ROOM_ENEMY
+	current_enemy_data = null
+	current_enemy_is_elite = false
+	returning_from_fight = false
+	reward_claimed = false
+	map_nodes.clear()
+	map_edges.clear()
+	map_lane_profiles.clear()
+	map_generated_act = -1
+	current_map_lane = clampi(current_map_lane, 0, max(0, map_lane_count - 1))
+	log_combat("Act advanced to %d" % current_act)
+	get_tree().call_deferred("change_scene_to_file", level_scene_path)
+	return false
+
+
+func mark_card_seen(card_id: String) -> void:
+	var meta_node: Node = get_node_or_null("/root/MetaProgression")
+	if meta_node != null and meta_node.has_method("mark_card_seen"):
+		meta_node.call("mark_card_seen", card_id)
+
+
+func mark_relic_seen(relic_id: String) -> void:
+	var meta_node: Node = get_node_or_null("/root/MetaProgression")
+	if meta_node != null and meta_node.has_method("mark_relic_seen"):
+		meta_node.call("mark_relic_seen", relic_id)
+
+
+func mark_enemy_seen(enemy_id: String) -> void:
+	var meta_node: Node = get_node_or_null("/root/MetaProgression")
+	if meta_node != null and meta_node.has_method("mark_enemy_seen"):
+		meta_node.call("mark_enemy_seen", enemy_id)
+
+
+func mark_event_seen(event_id: String) -> void:
+	var meta_node: Node = get_node_or_null("/root/MetaProgression")
+	if meta_node != null and meta_node.has_method("mark_event_seen"):
+		meta_node.call("mark_event_seen", event_id)
+
+
+func sync_seen_from_run_state() -> void:
+	for c in deck:
+		if c != null:
+			mark_card_seen(c.id)
+	for r in relics:
+		if r != null:
+			mark_relic_seen(r.id)
+	if current_enemy_data != null:
+		mark_enemy_seen(current_enemy_data.resource_path)
 
 
 func heal_from_campfire() -> int:
@@ -364,6 +710,7 @@ func add_relic(relic: RelicData, heal_to_full_on_add: bool = false) -> void:
 	if relic_copy == null:
 		relic_copy = relic
 	relics.append(relic_copy)
+	mark_relic_seen(relic_copy.id)
 	_recalculate_derived_stats()
 
 	var heal_amount: int = max(0, relic_copy.heal_on_pickup_flat)
@@ -486,7 +833,16 @@ func bootstrap_starting_relics_from_fight_scene() -> void:
 func get_available_card_pool() -> Array[CardData]:
 	if all_cards_cache.is_empty():
 		_load_content_pools()
-	return all_cards_cache
+	var out: Array[CardData] = []
+	for card in all_cards_cache:
+		if card == null:
+			continue
+		if has_node("/root/MetaProgression"):
+			var meta_node: Node = get_node("/root/MetaProgression")
+			if meta_node.has_method("is_card_unlocked") and not bool(meta_node.call("is_card_unlocked", card)):
+				continue
+		out.append(card)
+	return out
 
 
 func get_available_relic_pool() -> Array[RelicData]:
@@ -500,6 +856,10 @@ func get_available_relic_pool() -> Array[RelicData]:
 			continue
 		if relic.is_starter_relic:
 			continue
+		if has_node("/root/MetaProgression"):
+			var meta_node: Node = get_node("/root/MetaProgression")
+			if meta_node.has_method("is_relic_unlocked") and not bool(meta_node.call("is_relic_unlocked", relic)):
+				continue
 		out.append(relic)
 	return out
 
@@ -519,6 +879,15 @@ func export_state() -> Dictionary:
 	data["used_smith_free_upgrades"] = used_smith_free_upgrades
 	data["merchant_purge_count"] = merchant_purge_count
 	data["is_night"] = is_night
+	data["forced_room_type"] = forced_room_type
+	data["map_nodes"] = map_nodes
+	data["map_edges"] = map_edges
+	data["map_lane_profiles"] = map_lane_profiles
+	data["map_generated_act"] = map_generated_act
+	data["current_map_lane"] = current_map_lane
+	data["combat_log"] = combat_log
+	data["run_stats"] = run_stats
+	data["last_run_summary"] = last_run_summary
 	data["current_enemy_path"] = current_enemy_data.resource_path if current_enemy_data != null else ""
 	data["deck"] = _serialize_card_array(deck)
 	data["relics"] = _serialize_relic_array(relics)
@@ -544,10 +913,54 @@ func import_state(data: Dictionary) -> void:
 	used_smith_free_upgrades = int(data.get("used_smith_free_upgrades", 0))
 	merchant_purge_count = int(data.get("merchant_purge_count", 0))
 	is_night = bool(data.get("is_night", false))
+	forced_room_type = str(data.get("forced_room_type", ""))
+	current_map_lane = int(data.get("current_map_lane", 1))
+
+	var map_any: Variant = data.get("map_nodes", {})
+	if typeof(map_any) == TYPE_DICTIONARY:
+		map_nodes.clear()
+		var map_dict: Dictionary = map_any as Dictionary
+		for k in map_dict.keys():
+			map_nodes[int(k)] = map_dict[k]
+	else:
+		map_nodes = {}
+	var map_edges_any: Variant = data.get("map_edges", [])
+	if map_edges_any is Array:
+		map_edges = (map_edges_any as Array).duplicate(true)
+	else:
+		map_edges = []
+	var map_profiles_any: Variant = data.get("map_lane_profiles", {})
+	if typeof(map_profiles_any) == TYPE_DICTIONARY:
+		map_lane_profiles = (map_profiles_any as Dictionary).duplicate(true)
+	else:
+		map_lane_profiles = {}
+	map_generated_act = int(data.get("map_generated_act", -1))
+
+	var log_any: Variant = data.get("combat_log", [])
+	combat_log.clear()
+	if log_any is Array:
+		for item in log_any:
+			combat_log.append(str(item))
+
+	var stats_any: Variant = data.get("run_stats", {})
+	if typeof(stats_any) == TYPE_DICTIONARY:
+		run_stats = (stats_any as Dictionary).duplicate(true)
+
+	var summary_any: Variant = data.get("last_run_summary", {})
+	if typeof(summary_any) == TYPE_DICTIONARY:
+		last_run_summary = (summary_any as Dictionary).duplicate(true)
+	else:
+		last_run_summary = {}
 
 	_ensure_enemy_pools_for_current_act()
 	deck = _deserialize_card_array(data.get("deck", []))
 	relics = _deserialize_relic_array(data.get("relics", []))
+	for c in deck:
+		if c != null:
+			mark_card_seen(c.id)
+	for r in relics:
+		if r != null:
+			mark_relic_seen(r.id)
 	consumed_one_shot_relic_indices.clear()
 	var consumed: Array = data.get("consumed_one_shot_relic_indices", [])
 	for idx_any in consumed:
@@ -562,6 +975,23 @@ func import_state(data: Dictionary) -> void:
 
 	_recalculate_derived_stats()
 	current_hp = clampi(int(data.get("current_hp", max_hp)), 1, max_hp)
+	_ensure_run_stat_defaults()
+
+
+func _ensure_run_stat_defaults() -> void:
+	var defaults: Dictionary = {
+		"fights_won": 0.0,
+		"fights_lost": 0.0,
+		"turns_spent": 0.0,
+		"effects_applied": 0.0,
+		"effect_damage": 0.0,
+		"healing_done": 0.0,
+		"damage_dealt": 0.0,
+		"damage_taken": 0.0,
+	}
+	for key in defaults.keys():
+		if not run_stats.has(key):
+			run_stats[key] = defaults[key]
 
 
 func _serialize_card_array(cards: Array[CardData]) -> Array[Dictionary]:

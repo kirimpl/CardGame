@@ -1,0 +1,181 @@
+[gd_scene format=3 uid="uid://bh81old48flgx"]
+
+[ext_resource type="Script" uid="uid://mxlnbusyrwxw" path="res://UI/compendium.gd" id="1_nh6aj"]
+
+[node name="Compendium" type="CanvasLayer" unique_id=1714825223]
+script = ExtResource("1_nh6aj")
+
+[node name="Root" type="Control" parent="." unique_id=1233529831]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Backdrop" type="ColorRect" parent="Root" unique_id=1907009132]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.06, 0.06, 0.08, 1)
+
+[node name="Panel" type="PanelContainer" parent="Root" unique_id=270283463]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = 24.0
+offset_right = -24.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="Root/Panel" unique_id=588147568]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="Content" type="VBoxContainer" parent="Root/Panel/Margin" unique_id=1248960005]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="TopRow" type="HBoxContainer" parent="Root/Panel/Margin/Content" unique_id=1026199965]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ProfilePanel" type="PanelContainer" parent="Root/Panel/Margin/Content/TopRow" unique_id=1760718340]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ProfileMargin" type="MarginContainer" parent="Root/Panel/Margin/Content/TopRow/ProfilePanel" unique_id=678902951]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="ProfileVBox" type="VBoxContainer" parent="Root/Panel/Margin/Content/TopRow/ProfilePanel/ProfileMargin" unique_id=1516248581]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="LevelLabel" type="Label" parent="Root/Panel/Margin/Content/TopRow/ProfilePanel/ProfileMargin/ProfileVBox" unique_id=271763848]
+layout_mode = 2
+text = "Level: 1"
+
+[node name="XPLabel" type="Label" parent="Root/Panel/Margin/Content/TopRow/ProfilePanel/ProfileMargin/ProfileVBox" unique_id=957671672]
+layout_mode = 2
+text = "XP: 0 / 100"
+
+[node name="NextUnlockLabel" type="Label" parent="Root/Panel/Margin/Content/TopRow/ProfilePanel/ProfileMargin/ProfileVBox" unique_id=1920131178]
+layout_mode = 2
+text = "Next unlock: -"
+autowrap_mode = 3
+
+[node name="FilterBox" type="PanelContainer" parent="Root/Panel/Margin/Content/TopRow" unique_id=2085880429]
+layout_mode = 2
+
+[node name="FilterMargin" type="MarginContainer" parent="Root/Panel/Margin/Content/TopRow/FilterBox" unique_id=1053247609]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="ShowKnownOnly" type="CheckBox" parent="Root/Panel/Margin/Content/TopRow/FilterBox/FilterMargin" unique_id=288254055]
+layout_mode = 2
+text = "Показывать только открытые"
+
+[node name="Tabs" type="TabContainer" parent="Root/Panel/Margin/Content" unique_id=1906205537]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+current_tab = 0
+
+[node name="Cards" type="Control" parent="Root/Panel/Margin/Content/Tabs" unique_id=2026524264]
+layout_mode = 2
+metadata/_tab_index = 0
+
+[node name="Scroll" type="ScrollContainer" parent="Root/Panel/Margin/Content/Tabs/Cards" unique_id=1596635289]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="List" type="VBoxContainer" parent="Root/Panel/Margin/Content/Tabs/Cards/Scroll" unique_id=2017286478]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="Relics" type="Control" parent="Root/Panel/Margin/Content/Tabs" unique_id=1360597287]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 1
+
+[node name="Scroll" type="ScrollContainer" parent="Root/Panel/Margin/Content/Tabs/Relics" unique_id=1769114331]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="List" type="VBoxContainer" parent="Root/Panel/Margin/Content/Tabs/Relics/Scroll" unique_id=24893409]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="Enemies" type="Control" parent="Root/Panel/Margin/Content/Tabs" unique_id=1254868972]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 2
+
+[node name="Scroll" type="ScrollContainer" parent="Root/Panel/Margin/Content/Tabs/Enemies" unique_id=1078592505]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="List" type="VBoxContainer" parent="Root/Panel/Margin/Content/Tabs/Enemies/Scroll" unique_id=1674186444]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="Events" type="Control" parent="Root/Panel/Margin/Content/Tabs" unique_id=1112964356]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 3
+
+[node name="Scroll" type="ScrollContainer" parent="Root/Panel/Margin/Content/Tabs/Events" unique_id=154248731]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="List" type="VBoxContainer" parent="Root/Panel/Margin/Content/Tabs/Events/Scroll" unique_id=1212493117]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="BottomRow" type="HBoxContainer" parent="Root/Panel/Margin/Content" unique_id=1880664913]
+layout_mode = 2
+alignment = 2
+
+[node name="BackButton" type="Button" parent="Root/Panel/Margin/Content/BottomRow" unique_id=1935255012]
+custom_minimum_size = Vector2(120, 36)
+layout_mode = 2
+text = "Back"
+
+[connection signal="pressed" from="Root/Panel/Margin/Content/BottomRow/BackButton" to="." method="_on_back_pressed"]

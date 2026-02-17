@@ -14,10 +14,18 @@ func clear_save() -> void:
 
 
 func save_run() -> bool:
+	RunManager.sync_seen_from_run_state()
+
+	var meta: Node = get_node_or_null("/root/MetaProgression")
+	if meta != null and meta.has_method("save_profile"):
+		meta.call("save_profile")
+
 	var payload: Dictionary = {}
 	payload["saved_at_unix"] = Time.get_unix_time_from_system()
 	payload["scene_path"] = _get_current_scene_path()
 	payload["run_state"] = RunManager.export_state()
+	if meta != null and meta.has_method("export_state"):
+		payload["meta_state"] = meta.call("export_state")
 
 	var text: String = JSON.stringify(payload, "\t")
 	var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -51,6 +59,10 @@ func load_run() -> bool:
 		return false
 
 	RunManager.import_state(run_state_any as Dictionary)
+	var meta_node: Node = get_node_or_null("/root/MetaProgression")
+	var meta_state_any: Variant = payload.get("meta_state", {})
+	if meta_node != null and meta_node.has_method("import_state_merge") and typeof(meta_state_any) == TYPE_DICTIONARY:
+		meta_node.call("import_state_merge", meta_state_any)
 
 	var scene_path: String = str(payload.get("scene_path", ""))
 	if scene_path == "" or not ResourceLoader.exists(scene_path):

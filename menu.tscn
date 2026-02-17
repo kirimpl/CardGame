@@ -8,30 +8,39 @@ script = ExtResource("1_lti8b")
 
 [node name="Play" type="Button" parent="." unique_id=1981070127]
 offset_left = 384.0
-offset_top = 171.0
+offset_top = 140.0
 offset_right = 802.0
-offset_bottom = 264.0
+offset_bottom = 233.0
 theme_override_font_sizes/font_size = 50
-text = "Играть"
+text = "Play"
 
 [node name="Settings" type="Button" parent="." unique_id=990001]
 offset_left = 384.0
-offset_top = 285.0
+offset_top = 254.0
 offset_right = 802.0
-offset_bottom = 378.0
+offset_bottom = 347.0
 theme_override_font_sizes/font_size = 50
-text = "Настройки"
+text = "Settings"
 
 [node name="Quit" type="Button" parent="." unique_id=16262511]
 offset_left = 384.0
-offset_top = 395.0
+offset_top = 483.0
 offset_right = 802.0
-offset_bottom = 488.0
+offset_bottom = 576.0
 theme_override_font_sizes/font_size = 50
-text = "Выход"
+text = "Quit"
+
+[node name="Codex" type="Button" parent="." unique_id=625705920]
+offset_left = 384.0
+offset_top = 371.0
+offset_right = 802.0
+offset_bottom = 464.0
+theme_override_font_sizes/font_size = 50
+text = "Compendium"
 
 [node name="BG" parent="." unique_id=1178864022 instance=ExtResource("2_ouk20")]
 
 [connection signal="pressed" from="Play" to="." method="_on_play_pressed"]
 [connection signal="pressed" from="Settings" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="Quit" to="." method="_on_quit_pressed"]
+[connection signal="pressed" from="Codex" to="." method="_on_codex_pressed"]

@@ -9,6 +9,7 @@ var active_station_id: String = ""
 var campfire_used: bool = false
 var popup_mode: String = ""
 var active_event_room: bool = false
+var forced_room_type: String = ""
 
 @export var enemy_overworld_scene: PackedScene = preload("res://Mob/EnemyOverworld.tscn")
 @export var card_view_scene: PackedScene = preload("res://UI/CardView.tscn")
@@ -46,6 +47,7 @@ var relic_tooltip: PanelContainer = null
 var relic_tooltip_title: Label = null
 var relic_tooltip_desc: Label = null
 var relic_signature_cached: String = ""
+var save_exit_btn: Button = null
 
 
 func _ready() -> void:
@@ -59,11 +61,15 @@ func _ready() -> void:
 	_setup_interact_label()
 	_setup_popup_ui()
 	_setup_relic_panel()
+	_setup_save_exit_button()
+	forced_room_type = RunManager.consume_forced_room_type()
+	if forced_room_type != "":
+		RunManager.forced_room_type = forced_room_type
 
 	if player.has_signal("hit_enemy") and not player.hit_enemy.is_connected(_on_player_hit_enemy):
 		player.hit_enemy.connect(_on_player_hit_enemy)
 
-	is_rest_room = RunManager.is_rest_floor(RunManager.current_floor)
+	is_rest_room = (forced_room_type == RunManager.ROOM_REST) or RunManager.is_rest_floor(RunManager.current_floor)
 	if is_rest_room:
 		_setup_rest_state()
 	elif RunManager.returning_from_fight:
@@ -76,7 +82,29 @@ func _ready() -> void:
 
 func _setup_battle_state() -> void:
 	active_event_room = false
-	if _try_start_event_room():
+	if forced_room_type == RunManager.ROOM_MERCHANT:
+		RunManager.forced_room_type = ""
+		_setup_rest_state()
+		_open_merchant_popup()
+		return
+	if forced_room_type == RunManager.ROOM_EVENT:
+		RunManager.forced_room_type = ""
+		active_event_room = true
+		_open_random_event_now()
+		chest.hide()
+		chest.monitoring = false
+		portal.show()
+		portal.monitoring = true
+		return
+	if forced_room_type == RunManager.ROOM_TREASURE:
+		RunManager.forced_room_type = ""
+		chest.show()
+		chest.monitoring = true
+		portal.hide()
+		portal.monitoring = false
+		RunManager.reward_claimed = false
+		return
+	if forced_room_type == "" and _try_start_event_room():
 		active_event_room = true
 		chest.hide()
 		chest.monitoring = false
@@ -88,6 +116,17 @@ func _setup_battle_state() -> void:
 	chest.monitoring = false
 	portal.hide()
 	portal.monitoring = false
+
+
+func _open_random_event_now() -> void:
+	var roll: int = randi_range(0, 2)
+	match roll:
+		0:
+			_open_event_forgotten_shrine()
+		1:
+			_open_event_cursed_totem()
+		_:
+			_open_event_traveling_sage()
 
 
 func _setup_victory_state() -> void:
@@ -107,6 +146,7 @@ func _setup_victory_state() -> void:
 
 
 func _setup_rest_state() -> void:
+	RunManager.forced_room_type = ""
 	if is_instance_valid(enemy):
 		enemy.queue_free()
 	enemy = null
@@ -180,6 +220,8 @@ func _spawn_random_enemy() -> void:
 	if picked == null:
 		push_error("Level: failed to pick EnemyData")
 		return
+	RunManager.mark_enemy_seen(picked.resource_path)
+	RunManager.forced_room_type = ""
 
 	enemy = enemy_overworld_scene.instantiate()
 	enemy.global_position = enemy_spawn.global_position
@@ -253,6 +295,7 @@ func _get_event_room_chance_for_floor(floor: int) -> float:
 
 
 func _open_event_forgotten_shrine() -> void:
+	RunManager.mark_event_seen("forgotten_shrine")
 	_show_popup_shell("Event: Forgotten Shrine")
 	var info: Label = Label.new()
 	info.text = "A ruined shrine hums with old power."
@@ -276,6 +319,7 @@ func _event_shrine_cleanse() -> void:
 
 
 func _open_event_cursed_totem() -> void:
+	RunManager.mark_event_seen("cursed_totem")
 	_show_popup_shell("Event: Cursed Totem")
 	var info: Label = Label.new()
 	info.text = "A totem offers strength at a cost."
@@ -293,6 +337,7 @@ func _event_totem_accept() -> void:
 
 
 func _open_event_traveling_sage() -> void:
+	RunManager.mark_event_seen("traveling_sage")
 	_show_popup_shell("Event: Traveling Sage")
 	var info: Label = Label.new()
 	info.text = "A sage offers to train your deck."
@@ -455,6 +500,8 @@ func _use_campfire() -> void:
 	var base_pct: float = RunManager.campfire_heal_percent
 	var bonus_pct: float = RunManager.get_campfire_heal_bonus_percent()
 	var healed: int = RunManager.heal_from_campfire()
+	RunManager.add_run_stat("healing_done", float(healed))
+	RunManager.log_combat("Campfire healed %d HP on floor %d" % [healed, RunManager.current_floor])
 	RunManager.toggle_day_night()
 	campfire_used = true
 	_update_hud()
@@ -911,6 +958,27 @@ func _setup_day_label() -> void:
 	day_label.offset_bottom = 23.0
 	day_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hud.add_child(day_label)
+
+
+func _setup_save_exit_button() -> void:
+	var hud: CanvasLayer = get_node_or_null("HUD")
+	if hud == null:
+		return
+	save_exit_btn = Button.new()
+	save_exit_btn.name = "SaveExitButton"
+	save_exit_btn.offset_left = 1048.0
+	save_exit_btn.offset_top = 6.0
+	save_exit_btn.offset_right = 1272.0
+	save_exit_btn.offset_bottom = 34.0
+	save_exit_btn.text = "Save & Main Menu"
+	save_exit_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	save_exit_btn.pressed.connect(_on_save_exit_pressed)
+	hud.add_child(save_exit_btn)
+
+
+func _on_save_exit_pressed() -> void:
+	SaveSystem.save_run()
+	get_tree().change_scene_to_file("res://menu.tscn")
 
 
 func _setup_interact_label() -> void:

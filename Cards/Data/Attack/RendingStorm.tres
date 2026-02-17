@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Resource" path="res://Cards/Effects/ArmorBreak.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "rending_storm"
+title = "Rending Storm"
+description = "Deal 5 damage to all enemies. Apply Armor Break."
+cost = 2
+damage = 5
+effect = ExtResource("2")
+effect_durability = 2
+rarity = 2
+unlock_level = 6
+hits_all_enemies = true
+upgraded_description = "Deal 7 damage to all enemies. Apply Armor Break."
+upgraded_damage = 7

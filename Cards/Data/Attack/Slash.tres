@@ -8,6 +8,6 @@ id = "slash"
 title = "Slash"
 description = "Deal 13 damage."
 cost = 2
-damage = 13
+damage = 12
 rarity = 1
 metadata/_custom_type_script = "uid://be11khx8iq8gm"

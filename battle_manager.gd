@@ -90,6 +90,10 @@ var status_tooltip_title: Label = null
 var status_tooltip_desc: Label = null
 var enemy_status_signature: String = ""
 var player_status_signature: String = ""
+var combat_log_panel: PanelContainer = null
+var combat_log_text: RichTextLabel = null
+var combat_log_toggle_btn: Button = null
+var save_exit_btn: Button = null
 
 
 func _ready() -> void:
@@ -102,6 +106,8 @@ func _ready() -> void:
 	_setup_time_label()
 	_setup_player_status_row()
 	_setup_status_tooltip()
+	_setup_combat_log_ui()
+	_setup_save_exit_button()
 	_bind_pile_label_events()
 
 	if ui_speed_btn != null:
@@ -116,6 +122,13 @@ func _ready() -> void:
 	await get_tree().process_frame
 	await _spawn_combatants()
 	_ensure_starting_relics()
+	for relic in RunManager.relics:
+		if relic != null:
+			RunManager.mark_relic_seen(relic.id)
+	var enemy_name: String = RunManager.current_enemy_data.name if RunManager.current_enemy_data != null else "Enemy"
+	if RunManager.current_enemy_data != null:
+		RunManager.mark_enemy_seen(RunManager.current_enemy_data.resource_path)
+	_log_turn_action("System", "FightStart", "vs %s on floor %d" % [enemy_name, RunManager.current_floor])
 
 	_setup_deck()
 	_update_ui()
@@ -317,6 +330,27 @@ func _assert_ui() -> bool:
 	return ui_player_bar != null and ui_enemy_hp != null and end_btn != null and hand_controller != null and hand_root != null and ui_deck != null and ui_discard != null and ui_energy != null
 
 
+func _append_combat_log(text: String) -> void:
+	RunManager.log_combat(text)
+	_refresh_combat_log_ui()
+
+
+func _log_turn_action(actor: String, action: String, result: String) -> void:
+	_append_combat_log("Turn %d | %s | %s | %s" % [turn_number, actor, action, result])
+
+
+func _refresh_combat_log_ui() -> void:
+	if combat_log_text == null:
+		return
+	combat_log_text.clear()
+	var lines: PackedStringArray = RunManager.get_combat_log_tail(16)
+	if lines.is_empty():
+		lines.append("No entries yet")
+	for line in lines:
+		combat_log_text.append_text(line + "\n")
+	combat_log_text.scroll_to_line(combat_log_text.get_line_count())
+
+
 func _setup_pile_ui() -> void:
 	pile_overlay = Control.new()
 	pile_overlay.name = "PileOverlay"
@@ -446,6 +480,99 @@ func _setup_status_tooltip() -> void:
 	vbox.add_child(status_tooltip_desc)
 
 
+func _setup_combat_log_ui() -> void:
+	combat_log_toggle_btn = Button.new()
+	combat_log_toggle_btn.name = "CombatLogToggle"
+	combat_log_toggle_btn.anchor_left = 1.0
+	combat_log_toggle_btn.anchor_top = 1.0
+	combat_log_toggle_btn.anchor_right = 1.0
+	combat_log_toggle_btn.anchor_bottom = 1.0
+	combat_log_toggle_btn.offset_left = -140.0
+	combat_log_toggle_btn.offset_top = -42.0
+	combat_log_toggle_btn.offset_right = -12.0
+	combat_log_toggle_btn.offset_bottom = -10.0
+	combat_log_toggle_btn.text = "Show Log"
+	combat_log_toggle_btn.pressed.connect(_on_combat_log_toggle_pressed)
+	ui_root.add_child(combat_log_toggle_btn)
+
+	combat_log_panel = PanelContainer.new()
+	combat_log_panel.name = "CombatLogPanel"
+	combat_log_panel.anchor_left = 1.0
+	combat_log_panel.anchor_top = 1.0
+	combat_log_panel.anchor_right = 1.0
+	combat_log_panel.anchor_bottom = 1.0
+	combat_log_panel.offset_left = -382.0
+	combat_log_panel.offset_top = -252.0
+	combat_log_panel.offset_right = -12.0
+	combat_log_panel.offset_bottom = -48.0
+	combat_log_panel.visible = false
+	ui_root.add_child(combat_log_panel)
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 8)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_right", 8)
+	margin.add_theme_constant_override("margin_bottom", 8)
+	combat_log_panel.add_child(margin)
+
+	var vbox: VBoxContainer = VBoxContainer.new()
+	margin.add_child(vbox)
+
+	var title: Label = Label.new()
+	title.text = "Combat Log"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_color_override("font_color", Color(0.93, 0.94, 0.98, 1.0))
+	vbox.add_child(title)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(scroll)
+
+	combat_log_text = RichTextLabel.new()
+	combat_log_text.fit_content = true
+	combat_log_text.scroll_active = true
+	combat_log_text.selection_enabled = false
+	combat_log_text.bbcode_enabled = false
+	combat_log_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	combat_log_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	combat_log_text.custom_minimum_size = Vector2(320.0, 170.0)
+	combat_log_text.add_theme_color_override("default_color", Color(0.93, 0.94, 0.98, 1.0))
+	scroll.add_child(combat_log_text)
+	_refresh_combat_log_ui()
+
+
+func _on_combat_log_toggle_pressed() -> void:
+	if combat_log_panel == null:
+		return
+	combat_log_panel.visible = not combat_log_panel.visible
+	if combat_log_toggle_btn != null:
+		combat_log_toggle_btn.text = "Hide Log" if combat_log_panel.visible else "Show Log"
+	if combat_log_panel.visible:
+		_refresh_combat_log_ui()
+
+
+func _setup_save_exit_button() -> void:
+	save_exit_btn = Button.new()
+	save_exit_btn.name = "SaveExitButton"
+	save_exit_btn.anchor_left = 1.0
+	save_exit_btn.anchor_top = 0.0
+	save_exit_btn.anchor_right = 1.0
+	save_exit_btn.anchor_bottom = 0.0
+	save_exit_btn.offset_left = -232.0
+	save_exit_btn.offset_top = 6.0
+	save_exit_btn.offset_right = -10.0
+	save_exit_btn.offset_bottom = 34.0
+	save_exit_btn.text = "Save & Main Menu"
+	save_exit_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	save_exit_btn.pressed.connect(_on_save_exit_pressed)
+	ui_root.add_child(save_exit_btn)
+
+
+func _on_save_exit_pressed() -> void:
+	SaveSystem.save_run()
+	get_tree().change_scene_to_file("res://menu.tscn")
+
+
 func _bind_status_tooltip(label: Label, title: String, desc: String) -> void:
 	if label == null:
 		return
@@ -573,6 +700,9 @@ func _setup_deck() -> void:
 	elif not starting_deck.is_empty():
 		draw_pile = _duplicate_cards(starting_deck)
 		RunManager.deck = _duplicate_cards(starting_deck)
+	for deck_card in RunManager.deck:
+		if deck_card != null:
+			RunManager.mark_card_seen(deck_card.id)
 	draw_pile.shuffle()
 
 
@@ -600,6 +730,7 @@ func _start_turn() -> void:
 func _start_player_turn_setup() -> void:
 	player_turns_started += 1
 	turn_number = player_turns_started
+	_log_turn_action("System", "TurnStart", "Player turn")
 	energy = energy_max
 	player_defense = 0
 	if _tick_player_effects(EffectData.TickWhen.START_TURN):
@@ -676,6 +807,8 @@ func _on_card_played(card: CardData) -> void:
 func _play_card(card: CardData, forced_target: Node2D = null) -> void:
 	busy = true
 	_set_buttons_enabled(false)
+	_log_turn_action("Player", "PlayCard", card.get_display_title())
+	RunManager.mark_card_seen(card.id)
 
 	var card_cost: int = card.get_cost()
 	var card_damage: int = card.get_damage()
@@ -731,12 +864,16 @@ func _play_card(card: CardData, forced_target: Node2D = null) -> void:
 				var base_damage: int = card_damage + dmg_bonus
 				var final_damage: int = max(0, int(round(float(base_damage) * outgoing_mult)))
 				t.take_damage(final_damage)
+				if final_damage > 0:
+					_log_turn_action("Player", "Damage", "%s dealt %d" % [card.get_display_title(), final_damage])
 				if card.has_method("has_effect") and card.has_effect() and t.has_method("apply_effect") and card_effect != null:
 					var eff_dur: int = card.get_effect_durability()
 					if eff_dur > 0:
 						t.apply_effect(card_effect, eff_dur)
+						RunManager.add_run_stat("effects_applied", 1.0)
 				if enchant_attack_charges > 0 and enchant_effect != null and t.has_method("apply_effect"):
 					t.apply_effect(enchant_effect, enchant_effect_durability)
+					RunManager.add_run_stat("effects_applied", 1.0)
 			if enchant_attack_charges > 0 and enchant_effect != null:
 				enchant_attack_charges -= 1
 
@@ -746,6 +883,7 @@ func _play_card(card: CardData, forced_target: Node2D = null) -> void:
 			if is_instance_valid(t) and t.has_method("apply_effect"):
 				var eff_dur: int = max(1, card.get_effect_durability())
 				t.apply_effect(card_effect, eff_dur)
+				RunManager.add_run_stat("effects_applied", 1.0)
 
 	var idx: int = hand.find(card)
 	if idx != -1:
@@ -811,9 +949,17 @@ func _on_enemy_dead() -> void:
 	if player_effects.has("regeneration"):
 		var heal: int = _get_player_effect_value("regeneration")
 		RunManager.current_hp = min(RunManager.max_hp, RunManager.current_hp + heal)
+		RunManager.add_run_stat("healing_done", float(heal))
 	player_effects.clear()
 	RunManager.returning_from_fight = true
 	RunManager.reward_claimed = false
+	RunManager.add_run_stat("fights_won", 1.0)
+	RunManager.add_run_stat("turns_spent", float(turn_number))
+	_log_turn_action("System", "FightEnd", "Victory in %d turns, +%d gold" % [turn_number, rolled_gold])
+	var fought_boss: bool = RunManager.current_enemy_data != null and RunManager.current_enemy_data.difficulty == EnemyData.Difficulty.BOSS
+	if fought_boss or RunManager.current_floor >= RunManager.boss_floor:
+		RunManager.on_boss_defeated()
+		return
 	get_tree().change_scene_to_file("res://level.tscn")
 
 
@@ -877,6 +1023,8 @@ func _on_enemy_hit_player(_target: Node, source_enemy: Node2D) -> void:
 	if taken > 0:
 		RunManager.current_hp = max(0, int(RunManager.current_hp) - taken)
 		_spawn_damage_popup(_get_player_popup_position(), taken, true)
+		RunManager.add_run_stat("damage_taken", float(taken))
+		_log_turn_action("Enemy", "Attack", "Player took %d" % taken)
 		if is_instance_valid(player) and player.has_method("play_take_damage"):
 			player.call("play_take_damage")
 
@@ -884,7 +1032,8 @@ func _on_enemy_hit_player(_target: Node, source_enemy: Node2D) -> void:
 		if RunManager.try_trigger_relic_revive():
 			_update_ui()
 			return
-		get_tree().change_scene_to_file("res://menu.tscn")
+		RunManager.add_run_stat("fights_lost", 1.0)
+		RunManager.finish_run(false, "Defeated in combat")
 		return
 	_update_ui()
 
@@ -1071,13 +1220,21 @@ func _on_enemy_apply_player_effects(payloads: Array) -> void:
 		var dur: int = int(payload.get("duration", 1))
 		var stacks: int = int(payload.get("stacks", 1))
 		_apply_player_effect(effect, max(1, dur), max(1, stacks))
+		RunManager.add_run_stat("effects_applied", 1.0)
+		_log_turn_action("Enemy", "ApplyEffect", effect.title if effect.title != "" else effect.id)
 
 
-func _on_enemy_damage_taken(amount: int, source_enemy: Node2D) -> void:
+func _on_enemy_damage_taken(amount: int, is_effect_damage: bool, source_enemy: Node2D) -> void:
 	if amount <= 0:
 		return
 	var pos: Vector2 = _get_enemy_pick_position(source_enemy) + Vector2(0.0, -64.0)
 	_spawn_damage_popup(pos, amount, true)
+	RunManager.add_run_stat("damage_dealt", float(amount))
+	if is_effect_damage:
+		RunManager.add_run_stat("effect_damage", float(amount))
+		_log_turn_action("Effect", "DamageOverTime", "Enemy took %d" % amount)
+	else:
+		_log_turn_action("Player", "Attack", "Enemy took %d" % amount)
 
 
 func _enemy_action() -> void:
@@ -1087,6 +1244,7 @@ func _enemy_action() -> void:
 		return
 
 	_update_ui()
+	_log_turn_action("System", "TurnSwitch", "Enemy turn")
 	for enemy_instance in alive:
 		if not is_instance_valid(enemy_instance):
 			continue
@@ -1217,11 +1375,14 @@ func _tick_player_effects(phase: EffectData.TickWhen) -> bool:
 			if dot > 0:
 				RunManager.current_hp = max(0, int(RunManager.current_hp) - dot)
 				_spawn_damage_popup(_get_player_popup_position(), dot, true)
+				RunManager.add_run_stat("damage_taken", float(dot))
+				_log_turn_action("Effect", "DamageOverTime", "Player took %d" % dot)
 				if int(RunManager.current_hp) <= 0:
 					if RunManager.try_trigger_relic_revive():
 						_update_ui()
 					else:
-						get_tree().change_scene_to_file("res://menu.tscn")
+						RunManager.add_run_stat("fights_lost", 1.0)
+						RunManager.finish_run(false, "Defeated by effect damage")
 					return true
 
 		var dur: int = int(e.get("dur", 0))

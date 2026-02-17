@@ -13,4 +13,5 @@ damage = 4
 effect = ExtResource("2")
 effect_durability = 2
 rarity = 2
+unlock_level = 3
 hits_all_enemies = true

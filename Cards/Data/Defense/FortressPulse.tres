@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Resource" path="res://Cards/Effects/Regeneration.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "fortress_pulse"
+title = "Fortress Pulse"
+description = "Gain 9 block. Apply Regeneration."
+cost = 2
+defense = 9
+effect = ExtResource("2")
+effect_durability = 1
+rarity = 2
+unlock_level = 6
+upgraded_description = "Gain 12 block. Apply Regeneration."
+upgraded_defense = 12

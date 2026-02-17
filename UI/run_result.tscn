@@ -1,0 +1,86 @@
+[gd_scene format=3 uid="uid://dcnbsf2d8qowp"]
+
+[ext_resource type="Script" path="res://UI/run_result.gd" id="1_k8wuy"]
+
+[node name="RunResult" type="CanvasLayer"]
+script = ExtResource("1_k8wuy")
+
+[node name="Root" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Backdrop" type="ColorRect" parent="Root"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.04, 0.05, 0.07, 1)
+
+[node name="Panel" type="PanelContainer" parent="Root"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -280.0
+offset_top = -220.0
+offset_right = 280.0
+offset_bottom = 220.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="Root/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="VBox" type="VBoxContainer" parent="Root/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Root/Panel/Margin/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 34
+text = "Run Complete"
+horizontal_alignment = 1
+
+[node name="Reason" type="Label" parent="Root/Panel/Margin/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = ""
+horizontal_alignment = 1
+
+[node name="Stats" type="Label" parent="Root/Panel/Margin/VBox"]
+layout_mode = 2
+autowrap_mode = 3
+text = "Stats"
+
+[node name="XP" type="Label" parent="Root/Panel/Margin/VBox"]
+layout_mode = 2
+autowrap_mode = 3
+text = "XP"
+
+[node name="Buttons" type="HBoxContainer" parent="Root/Panel/Margin/VBox"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 10
+
+[node name="NewRunButton" type="Button" parent="Root/Panel/Margin/VBox/Buttons"]
+layout_mode = 2
+text = "New Run"
+
+[node name="MenuButton" type="Button" parent="Root/Panel/Margin/VBox/Buttons"]
+layout_mode = 2
+text = "Main Menu"
+
+[connection signal="pressed" from="Root/Panel/Margin/VBox/Buttons/NewRunButton" to="." method="_on_new_run_pressed"]
+[connection signal="pressed" from="Root/Panel/Margin/VBox/Buttons/MenuButton" to="." method="_on_main_menu_pressed"]

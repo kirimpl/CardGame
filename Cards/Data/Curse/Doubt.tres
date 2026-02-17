@@ -1,13 +1,12 @@
-[gd_resource type="Resource" script_class="CardData" format=3]
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://8flchh81cuu8"]
 
-[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+[ext_resource type="Script" uid="uid://be11khx8iq8gm" path="res://Cards/CardData.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
 id = "curse_doubt"
 title = "Doubt"
 description = "Curse. Unplayable."
-rarity = 0
 can_appear_in_rewards = false
 can_appear_in_merchant = false
 is_curse = true

@@ -3,7 +3,7 @@ const EnemyAppliedEffectRes = preload("res://Enemies/EnemyAppliedEffect.gd")
 
 signal hit_player(target: Node)
 signal apply_player_effects(payloads: Array)
-signal damage_taken(amount: int)
+signal damage_taken(amount: int, is_effect_damage: bool)
 signal turn_finished
 signal died
 
@@ -22,17 +22,17 @@ const DEFAULT_EFFECT_PATHS: Dictionary = {
 }
 
 @export_group("Combat")
-@export var floor_hp_scale: int = 4
+@export var floor_hp_scale: int = 3
 @export var floor_damage_scale: int = 1
-@export var elite_hp_multiplier: float = 1.5
-@export var elite_damage_multiplier: float = 1.35
-@export var early_normal_hp_bonus: int = 5
-@export var early_normal_damage_bonus: int = 2
+@export var elite_hp_multiplier: float = 1.42
+@export var elite_damage_multiplier: float = 1.28
+@export var early_normal_hp_bonus: int = 3
+@export var early_normal_damage_bonus: int = 1
 @export var early_normal_bonus_last_floor: int = 3
-@export var defend_amount: int = 5
-@export var buff_damage_amount: int = 2
+@export var defend_amount: int = 4
+@export var buff_damage_amount: int = 1
 @export var attack_lunge_offset: Vector2 = Vector2(60, 0)
-@export var night_debuff_chance_bonus_percent: int = 10
+@export var night_debuff_chance_bonus_percent: int = 8
 @export var night_debuff_duration_bonus: int = 1
 
 @export_group("Animation Settings")
@@ -139,7 +139,7 @@ func _tick_effects_for_phase(phase: EffectData.TickWhen) -> void:
 				dot = max(0, int(eff.value) * max(1, stacks))
 			if dot > 0:
 				hp = max(0, hp - dot)
-				emit_signal("damage_taken", dot)
+				emit_signal("damage_taken", dot, true)
 				if hp > 0:
 					await play_hit_anim()
 				else:
@@ -420,7 +420,7 @@ func take_damage(amount: int) -> void:
 
 	hp = max(0, hp - dealt)
 	if dealt > 0:
-		emit_signal("damage_taken", dealt)
+		emit_signal("damage_taken", dealt, false)
 	if hp <= 0:
 		await play_death()
 	elif dealt > 0:

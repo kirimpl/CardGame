@@ -12,6 +12,7 @@ enum ActiveTime { ANY, DAY_ONLY, NIGHT_ONLY }
 @export var rarity: RelicRarity = RelicRarity.COMMON
 @export var is_starter_relic: bool = false
 @export var active_time: ActiveTime = ActiveTime.ANY
+@export_range(1, 99, 1) var unlock_level: int = 1
 
 @export_group("Survivability")
 @export var max_hp_bonus: int = 0
