@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "right_lunge"
+title = "Right Lunge"
+description = "Deal 7 damage. Move to Right stance. In Right stance deal +3."
+cost = 1
+damage = 7
+rarity = 1
+unlock_level = 2
+set_stance_on_play = 2
+damage_bonus_right = 3
+upgraded_damage = 10

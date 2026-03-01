@@ -347,12 +347,16 @@ func apply_effect(effect_or_id: Variant, durability: int) -> void:
 		e = {"data": eff, "dur": int(durability), "stacks": 1}
 	else:
 		e["data"] = eff
-		if eff.stackable:
-			e["stacks"] = int(e.get("stacks", 0)) + 1
-			e["dur"] = int(e.get("dur", 0)) + int(durability)
-		else:
-			e["stacks"] = 1
-			e["dur"] = int(e.get("dur", 0)) + int(durability)
+		match eff.stack_model:
+			EffectData.StackModel.INTENSITY:
+				e["stacks"] = int(e.get("stacks", 0)) + 1
+				e["dur"] = max(int(e.get("dur", 0)), int(durability))
+			EffectData.StackModel.UNIQUE:
+				e["stacks"] = 1
+				e["dur"] = max(int(e.get("dur", 0)), int(durability))
+			_:
+				e["stacks"] = 1
+				e["dur"] = int(e.get("dur", 0)) + int(durability)
 	effects[id] = e
 
 

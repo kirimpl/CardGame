@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "sidestep_left"
+title = "Sidestep Left"
+description = "Move to Left stance. Gain 4 block (+3 in Left)."
+cost = 1
+defense = 4
+rarity = 1
+unlock_level = 2
+set_stance_on_play = 0
+defense_bonus_left = 3
+upgraded_defense = 6

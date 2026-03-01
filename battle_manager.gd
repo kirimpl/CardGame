@@ -66,6 +66,7 @@ var hand_size: int = 5
 var player_defense: int = 0
 var turn_number: int = 1
 var player_turns_started: int = 0
+var player_stance: int = CardData.Stance.CENTER
 var enchant_attack_charges: int = 0
 var enchant_effect: EffectData = null
 var enchant_effect_durability: int = 0
@@ -98,6 +99,13 @@ var save_exit_btn: Button = null
 var damage_preview_label: Label = null
 var last_player_hp_display: int = -1
 var last_player_block_display: int = -1
+var stance_label: Label = null
+var echo_label: Label = null
+var echo_counters: Dictionary = {
+	"ATTACK": 0,
+	"DEFENSE": 0,
+	"BUFF": 0,
+}
 
 
 func _ready() -> void:
@@ -110,6 +118,7 @@ func _ready() -> void:
 	_setup_time_label()
 	_setup_player_status_row()
 	_setup_status_tooltip()
+	_setup_stance_echo_ui()
 	_setup_combat_log_ui()
 	_setup_damage_preview_ui()
 	_setup_save_exit_button()
@@ -332,6 +341,14 @@ func _update_ui() -> void:
 		ui_turn_label.text = "Turn: %d" % turn_number
 	if ui_time_label != null:
 		ui_time_label.text = "Time: %s" % ("Night" if RunManager.is_night else "Day")
+	if stance_label != null:
+		stance_label.text = "Stance: %s" % _stance_name(player_stance)
+	if echo_label != null:
+		echo_label.text = "Echo A/D/B: %d/%d/%d" % [
+			int(echo_counters.get("ATTACK", 0)),
+			int(echo_counters.get("DEFENSE", 0)),
+			int(echo_counters.get("BUFF", 0)),
+		]
 
 	_refresh_relic_panel()
 	_refresh_player_effects_ui()
@@ -480,6 +497,28 @@ func _setup_time_label() -> void:
 	ui_time_label.offset_bottom = 34.0
 	ui_time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ui_root.add_child(ui_time_label)
+
+
+func _setup_stance_echo_ui() -> void:
+	stance_label = Label.new()
+	stance_label.name = "StanceLabel"
+	stance_label.offset_left = 470.0
+	stance_label.offset_top = 34.0
+	stance_label.offset_right = 730.0
+	stance_label.offset_bottom = 58.0
+	stance_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stance_label.add_theme_color_override("font_color", Color(0.95, 0.93, 0.78, 1.0))
+	ui_root.add_child(stance_label)
+
+	echo_label = Label.new()
+	echo_label.name = "EchoLabel"
+	echo_label.offset_left = 730.0
+	echo_label.offset_top = 34.0
+	echo_label.offset_right = 1020.0
+	echo_label.offset_bottom = 58.0
+	echo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	echo_label.add_theme_color_override("font_color", Color(0.7, 0.92, 1.0, 1.0))
+	ui_root.add_child(echo_label)
 
 
 func _setup_player_status_row() -> void:
@@ -752,6 +791,10 @@ func _setup_deck() -> void:
 	hand.clear()
 	turn_number = 1
 	player_turns_started = 0
+	player_stance = CardData.Stance.CENTER
+	echo_counters["ATTACK"] = 0
+	echo_counters["DEFENSE"] = 0
+	echo_counters["BUFF"] = 0
 	enchant_attack_charges = 0
 	enchant_effect = null
 	enchant_effect_durability = 0
@@ -859,10 +902,56 @@ func _update_energy_ui() -> void:
 		ui_energy_orb_label.text = "%d/%d" % [energy, energy_max]
 
 
+func _stance_name(stance: int) -> String:
+	match stance:
+		CardData.Stance.LEFT:
+			return "Left"
+		CardData.Stance.RIGHT:
+			return "Right"
+		_:
+			return "Center"
+
+
+func _set_player_stance(new_stance: int) -> void:
+	player_stance = clampi(new_stance, CardData.Stance.LEFT, CardData.Stance.RIGHT)
+	_log_turn_action("Player", "Stance", "Changed to %s" % _stance_name(player_stance))
+
+
+func _apply_echo_if_ready(card_type: CardData.CardType) -> void:
+	var key: String = "ATTACK"
+	match card_type:
+		CardData.CardType.DEFENSE:
+			key = "DEFENSE"
+		CardData.CardType.BUFF:
+			key = "BUFF"
+		_:
+			key = "ATTACK"
+	var current: int = int(echo_counters.get(key, 0)) + 1
+	if current >= 3:
+		echo_counters[key] = 0
+		match key:
+			"ATTACK":
+				var target: Node2D = _get_primary_enemy()
+				if target != null and target.has_method("take_damage"):
+					target.take_damage(4)
+					_log_turn_action("System", "Echo", "Attack echo deals 4")
+			"DEFENSE":
+				player_defense += 5
+				_log_turn_action("System", "Echo", "Defense echo gains 5 block")
+			"BUFF":
+				await _draw_cards(1)
+				_log_turn_action("System", "Echo", "Buff echo draws 1")
+	else:
+		echo_counters[key] = current
+
+
 func _on_card_played(card: CardData) -> void:
 	if busy or not player_turn:
 		return
 	if not card.is_playable():
+		return
+	if card.required_stance >= 0 and int(card.required_stance) != player_stance:
+		_log_turn_action("Player", "CardBlocked", "%s requires %s stance" % [card.get_display_title(), _stance_name(int(card.required_stance))])
 		return
 	if energy < card.get_cost():
 		return
@@ -880,11 +969,12 @@ func _play_card(card: CardData, forced_target: Node2D = null) -> void:
 	RunManager.mark_card_seen(card.id)
 
 	var card_cost: int = card.get_cost()
-	var card_damage: int = card.get_damage()
-	var card_defense: int = card.get_defense()
+	var card_damage: int = card.get_damage() + card.get_stance_damage_bonus(player_stance)
+	var card_defense: int = card.get_defense() + card.get_stance_defense_bonus(player_stance)
 	var card_effect: EffectData = card.get_effect()
 	var card_buff_effect: EffectData = card.get_buff_effect()
 	var card_buff_charges: int = card.get_buff_charges()
+	var played_type: CardData.CardType = card.get_card_type()
 
 	energy -= card_cost
 	_update_energy_ui()
@@ -963,6 +1053,9 @@ func _play_card(card: CardData, forced_target: Node2D = null) -> void:
 		discard_pile.append(card)
 
 	await _apply_post_play_manipulation(card)
+	if card.set_stance_on_play >= 0:
+		_set_player_stance(int(card.set_stance_on_play))
+	await _apply_echo_if_ready(played_type)
 
 	_refresh_hand_ui()
 	_update_deck_ui()
@@ -1449,12 +1542,16 @@ func _apply_player_effect(effect: EffectData, durability: int, stacks: int = 1) 
 		e = {"data": effect, "dur": durability, "stacks": max(1, stacks)}
 	else:
 		e["data"] = effect
-		if effect.stackable:
-			e["stacks"] = int(e.get("stacks", 0)) + max(1, stacks)
-			e["dur"] = int(e.get("dur", 0)) + durability
-		else:
-			e["stacks"] = 1
-			e["dur"] = max(int(e.get("dur", 0)), durability)
+		match effect.stack_model:
+			EffectData.StackModel.INTENSITY:
+				e["stacks"] = int(e.get("stacks", 0)) + max(1, stacks)
+				e["dur"] = max(int(e.get("dur", 0)), durability)
+			EffectData.StackModel.UNIQUE:
+				e["stacks"] = 1
+				e["dur"] = max(int(e.get("dur", 0)), durability)
+			_:
+				e["stacks"] = 1
+				e["dur"] = int(e.get("dur", 0)) + durability
 	player_effects[id] = e
 
 

@@ -17,6 +17,7 @@ class_name CardData
 enum CardType { ATTACK, DEFENSE, BUFF }
 enum BuffKind { NONE, ENCHANT_ATTACK_EFFECT, APPLY_SELF_EFFECT }
 enum Rarity { COMMON, UNCOMMON, RARE, LEGENDARY }
+enum Stance { LEFT, CENTER, RIGHT }
 
 @export_group("Meta")
 @export var rarity: Rarity = Rarity.COMMON
@@ -33,6 +34,16 @@ enum Rarity { COMMON, UNCOMMON, RARE, LEGENDARY }
 @export_group("Targeting")
 @export var hits_all_enemies: bool = false
 @export var target_required: bool = false
+
+@export_group("Stance")
+@export var required_stance: int = -1 # -1 = any, otherwise CardData.Stance
+@export var set_stance_on_play: int = -1 # -1 = no change, otherwise CardData.Stance
+@export var damage_bonus_left: int = 0
+@export var damage_bonus_center: int = 0
+@export var damage_bonus_right: int = 0
+@export var defense_bonus_left: int = 0
+@export var defense_bonus_center: int = 0
+@export var defense_bonus_right: int = 0
 
 @export_group("Draw/Manipulation")
 @export var cards_to_draw: int = 0
@@ -218,6 +229,26 @@ func requires_target_selection() -> bool:
 	if target_required:
 		return true
 	return get_damage() > 0 or has_effect()
+
+
+func get_stance_damage_bonus(stance: int) -> int:
+	match stance:
+		Stance.LEFT:
+			return damage_bonus_left
+		Stance.RIGHT:
+			return damage_bonus_right
+		_:
+			return damage_bonus_center
+
+
+func get_stance_defense_bonus(stance: int) -> int:
+	match stance:
+		Stance.LEFT:
+			return defense_bonus_left
+		Stance.RIGHT:
+			return defense_bonus_right
+		_:
+			return defense_bonus_center
 
 
 func get_cards_to_draw() -> int:
