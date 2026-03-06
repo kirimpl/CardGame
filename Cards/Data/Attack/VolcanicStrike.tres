@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "volcanic_strike"
+title = "Volcanic Strike"
+description = "Deal 16 damage. Gain 3 Overheat."
+cost = 2
+damage = 16
+rarity = 2
+unlock_level = 4
+overheat_gain = 3
+upgraded_damage = 20
+

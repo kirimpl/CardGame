@@ -4,6 +4,8 @@ const EVENT_DEFS: Array[Dictionary] = [
 	{"id": "forgotten_shrine", "title": "Forgotten Shrine", "desc": "Pay HP for a rare card or cleanse a curse."},
 	{"id": "cursed_totem", "title": "Cursed Totem", "desc": "Take a relic and receive a curse."},
 	{"id": "traveling_sage", "title": "Traveling Sage", "desc": "Spend gold to upgrade cards or cleanse curses."},
+	{"id": "sunwell", "title": "Sunwell", "desc": "Day event: gain Flux and restore health."},
+	{"id": "moon_altar", "title": "Moon Altar", "desc": "Night event: trade HP for power."},
 ]
 
 @onready var cards_list: VBoxContainer = $Root/Panel/Margin/Content/Tabs/Cards/Scroll/List

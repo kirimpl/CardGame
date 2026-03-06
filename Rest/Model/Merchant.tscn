@@ -1,0 +1,91 @@
+[gd_scene format=3 uid="uid://ofxjax6fl5eg"]
+
+[ext_resource type="Texture2D" uid="uid://i187stjbtedk" path="res://Asset/Rest/aligned_fox_strip_still.png" id="1_avdw2"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_w3b6q"]
+atlas = ExtResource("1_avdw2")
+region = Rect2(0, 0, 292, 195)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hhj5j"]
+atlas = ExtResource("1_avdw2")
+region = Rect2(292, 0, 292, 195)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_2fyg2"]
+atlas = ExtResource("1_avdw2")
+region = Rect2(584, 0, 292, 195)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_vxm88"]
+atlas = ExtResource("1_avdw2")
+region = Rect2(876, 0, 292, 195)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_y2sla"]
+atlas = ExtResource("1_avdw2")
+region = Rect2(1168, 0, 292, 195)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ugrig"]
+atlas = ExtResource("1_avdw2")
+region = Rect2(1460, 0, 292, 195)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_n1i8c"]
+atlas = ExtResource("1_avdw2")
+region = Rect2(1752, 0, 292, 195)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_fq77k"]
+atlas = ExtResource("1_avdw2")
+region = Rect2(2044, 0, 292, 195)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_f6b3l"]
+atlas = ExtResource("1_avdw2")
+region = Rect2(2336, 0, 292, 195)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_n6054"]
+atlas = ExtResource("1_avdw2")
+region = Rect2(2628, 0, 292, 195)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_b7cm6"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_w3b6q")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_hhj5j")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_2fyg2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_vxm88")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_y2sla")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ugrig")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_n1i8c")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_fq77k")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_f6b3l")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_n6054")
+}],
+"loop": true,
+"name": &"new_animation",
+"speed": 7.0
+}]
+
+[node name="Merchant" type="Node2D" unique_id=844528810]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=748579152]
+position = Vector2(-13.999998, 33.000004)
+scale = Vector2(0.41602555, 0.41602558)
+sprite_frames = SubResource("SpriteFrames_b7cm6")
+animation = &"new_animation"
+autoplay = "new_animation"
+frame_progress = 0.33530343

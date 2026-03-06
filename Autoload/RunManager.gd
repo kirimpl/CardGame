@@ -7,6 +7,11 @@ const ROOM_EVENT: String = "EVENT"
 const ROOM_TREASURE: String = "TREASURE"
 const ROOM_MERCHANT: String = "MERCHANT"
 const ROOM_BOSS: String = "BOSS"
+const MUTATOR_NONE: String = "NONE"
+const MUTATOR_BLEED_X2: String = "BLEED_X2"
+const MUTATOR_HEAL_HALF: String = "HEAL_HALF"
+const MUTATOR_FIRST_SKILL_FREE: String = "FIRST_SKILL_FREE"
+const MUTATOR_FIRST_ATTACK_BONUS: String = "FIRST_ATTACK_BONUS"
 
 @export_group("Run Defaults")
 @export var start_floor: int = 1
@@ -32,6 +37,19 @@ const ROOM_BOSS: String = "BOSS"
 @export_range(0.0, 1.0, 0.01) var campfire_heal_percent: float = 0.40
 @export_range(1.0, 3.0, 0.05) var night_enemy_hp_multiplier: float = 1.15
 @export_range(1.0, 3.0, 0.05) var night_enemy_damage_multiplier: float = 1.10
+@export_range(0.1, 3.0, 0.05) var night_dot_multiplier: float = 1.15
+@export_range(0.1, 3.0, 0.05) var night_debuff_multiplier: float = 1.10
+@export_range(0.1, 3.0, 0.05) var day_block_multiplier: float = 1.15
+@export_range(0.1, 3.0, 0.05) var day_heal_multiplier: float = 1.15
+@export_range(0, 10, 1) var starting_time_shards: int = 1
+@export_range(1, 10, 1) var max_time_shards: int = 4
+@export_range(0, 10, 1) var shards_per_floor: int = 1
+@export_range(0, 10, 1) var time_toggle_cost: int = 1
+@export_range(0.0, 1.0, 0.01) var mutator_none_weight: float = 0.40
+@export_range(0.0, 1.0, 0.01) var mutator_bleed_x2_weight: float = 0.18
+@export_range(0.0, 1.0, 0.01) var mutator_heal_half_weight: float = 0.12
+@export_range(0.0, 1.0, 0.01) var mutator_first_skill_free_weight: float = 0.20
+@export_range(0.0, 1.0, 0.01) var mutator_first_attack_bonus_weight: float = 0.10
 @export_file("*.tscn") var map_scene_path: String = "res://UI/map_screen.tscn"
 @export_file("*.tscn") var run_result_scene_path: String = "res://UI/run_result.tscn"
 @export_range(2, 6, 1) var map_lane_count: int = 3
@@ -55,7 +73,11 @@ var consumed_one_shot_relic_indices: Dictionary = {}
 var used_smith_free_upgrades: int = 0
 var merchant_purge_count: int = 0
 var is_night: bool = false
+var time_shards: int = 0
 var forced_room_type: String = ""
+var floor_mutators: Dictionary = {} # floor:int -> mutator id
+var current_floor_mutator: String = MUTATOR_NONE
+var last_floor_mutator: String = MUTATOR_NONE
 var map_nodes: Dictionary = {}
 var map_edges: Array[Dictionary] = []
 var map_lane_profiles: Dictionary = {}
@@ -299,15 +321,21 @@ func start_new_run() -> void:
 	returning_from_fight = false
 	reward_claimed = false
 	is_night = false
+	time_shards = clampi(starting_time_shards, 0, max_time_shards)
 	deck.clear()
 	relics.clear()
 	consumed_one_shot_relic_indices.clear()
 	used_smith_free_upgrades = 0
 	merchant_purge_count = 0
 	forced_room_type = ""
+	floor_mutators.clear()
+	current_floor_mutator = MUTATOR_NONE
+	last_floor_mutator = MUTATOR_NONE
 	map_nodes.clear()
 	map_edges.clear()
 	map_lane_profiles.clear()
+	floor_mutators.clear()
+	current_floor_mutator = MUTATOR_NONE
 	map_generated_act = -1
 	current_map_lane = clampi(current_map_lane, 0, max(0, map_lane_count - 1))
 	combat_log.clear()
@@ -367,10 +395,15 @@ func get_enemy_difficulty() -> String:
 	return "NORMAL"
 
 
-func toggle_day_night() -> void:
+func toggle_day_night(consume_shard: bool = false) -> bool:
+	if consume_shard:
+		if time_shards < max(0, time_toggle_cost):
+			return false
+		time_shards = max(0, time_shards - max(0, time_toggle_cost))
 	is_night = not is_night
 	_recalculate_derived_stats()
 	record_replay_event("time_toggle", {"is_night": is_night})
+	return true
 
 
 func log_combat(entry: String) -> void:
@@ -494,6 +527,11 @@ func travel_to_room(floor: int, lane: int, room_type: String) -> void:
 		return
 	current_floor = floor
 	current_map_lane = clampi(lane, 0, max(0, map_lane_count - 1))
+	time_shards = min(max_time_shards, time_shards + max(0, shards_per_floor))
+	if not floor_mutators.has(current_floor):
+		floor_mutators[current_floor] = roll_floor_mutator_for_floor(current_floor)
+	current_floor_mutator = str(floor_mutators.get(current_floor, MUTATOR_NONE))
+	last_floor_mutator = current_floor_mutator
 	forced_room_type = room_type
 	current_enemy_is_elite = (room_type == ROOM_ELITE)
 	returning_from_fight = false
@@ -533,17 +571,21 @@ func _roll_room_type_for_floor(floor: int, lane: int) -> String:
 
 
 func _pick_weighted_room(weights: Dictionary) -> String:
+	return _pick_weighted_key(weights, ROOM_ENEMY)
+
+
+func _pick_weighted_key(weights: Dictionary, fallback: String) -> String:
 	var total: float = 0.0
 	for key in weights.keys():
 		total += maxf(0.0, float(weights[key]))
 	if total <= 0.0:
-		return ROOM_ENEMY
+		return fallback
 	var roll: float = _rollf() * total
 	for key in weights.keys():
 		roll -= maxf(0.0, float(weights[key]))
 		if roll <= 0.0:
 			return str(key)
-	return ROOM_ENEMY
+	return fallback
 
 
 func _ensure_map_generated() -> void:
@@ -736,6 +778,9 @@ func sync_seen_from_run_state() -> void:
 
 func heal_from_campfire() -> int:
 	var effective_percent: float = campfire_heal_percent + get_campfire_heal_bonus_percent()
+	effective_percent *= get_phase_heal_multiplier()
+	if get_current_floor_mutator() == MUTATOR_HEAL_HALF:
+		effective_percent *= 0.5
 	var amount: int = max(1, int(round(float(max_hp) * effective_percent)))
 	current_hp = min(max_hp, current_hp + amount)
 	return amount
@@ -815,6 +860,73 @@ func get_floor_gold_multiplier(floor: int) -> float:
 	if floor <= 5:
 		return mid_floor_gold_multiplier
 	return 1.0
+
+
+func get_phase_block_multiplier() -> float:
+	if is_night:
+		return 1.0
+	return day_block_multiplier
+
+
+func get_phase_heal_multiplier() -> float:
+	if is_night:
+		return 1.0
+	return day_heal_multiplier
+
+
+func get_phase_dot_multiplier() -> float:
+	if is_night:
+		return night_dot_multiplier
+	return 1.0
+
+
+func get_phase_debuff_multiplier() -> float:
+	if is_night:
+		return night_debuff_multiplier
+	return 1.0
+
+
+func get_current_floor_mutator() -> String:
+	if current_floor_mutator == "":
+		return MUTATOR_NONE
+	return current_floor_mutator
+
+
+func get_current_floor_mutator_display() -> String:
+	match get_current_floor_mutator():
+		MUTATOR_BLEED_X2:
+			return "Mutator: Bleed x2"
+		MUTATOR_HEAL_HALF:
+			return "Mutator: Healing -50%"
+		MUTATOR_FIRST_SKILL_FREE:
+			return "Mutator: First Skill Free"
+		MUTATOR_FIRST_ATTACK_BONUS:
+			return "Mutator: First Attack +3"
+		_:
+			return "Mutator: None"
+
+
+func roll_floor_mutator_for_floor(floor: int) -> String:
+	if floor <= 1:
+		return MUTATOR_NONE
+	if floor >= boss_floor:
+		return MUTATOR_NONE
+	var weights: Dictionary = {
+		MUTATOR_NONE: mutator_none_weight,
+		MUTATOR_BLEED_X2: mutator_bleed_x2_weight,
+		MUTATOR_HEAL_HALF: mutator_heal_half_weight,
+		MUTATOR_FIRST_SKILL_FREE: mutator_first_skill_free_weight,
+		MUTATOR_FIRST_ATTACK_BONUS: mutator_first_attack_bonus_weight,
+	}
+	if floor <= 3:
+		weights[MUTATOR_HEAL_HALF] = 0.0
+		weights[MUTATOR_BLEED_X2] = mutator_bleed_x2_weight * 0.5
+	if floor >= 8:
+		weights[MUTATOR_NONE] = mutator_none_weight * 0.5
+	var rolled: String = _pick_weighted_key(weights, MUTATOR_NONE)
+	if rolled == last_floor_mutator and rolled != MUTATOR_NONE:
+		rolled = _pick_weighted_key(weights, MUTATOR_NONE)
+	return rolled
 
 
 func get_merchant_purge_price(base_price: int, increment: int) -> int:
@@ -964,6 +1076,10 @@ func get_available_card_pool() -> Array[CardData]:
 	for card in all_cards_cache:
 		if card == null:
 			continue
+		if card.time_phase == CardData.TimePhase.DAY_ONLY and is_night:
+			continue
+		if card.time_phase == CardData.TimePhase.NIGHT_ONLY and not is_night:
+			continue
 		if has_node("/root/MetaProgression"):
 			var meta_node: Node = get_node("/root/MetaProgression")
 			if meta_node.has_method("is_card_unlocked") and not bool(meta_node.call("is_card_unlocked", card)):
@@ -982,6 +1098,10 @@ func get_available_relic_pool() -> Array[RelicData]:
 		if relic.id.strip_edges() == "":
 			continue
 		if relic.is_starter_relic:
+			continue
+		if relic.active_time == RelicData.ActiveTime.DAY_ONLY and is_night:
+			continue
+		if relic.active_time == RelicData.ActiveTime.NIGHT_ONLY and not is_night:
 			continue
 		if has_node("/root/MetaProgression"):
 			var meta_node: Node = get_node("/root/MetaProgression")
@@ -1006,7 +1126,11 @@ func export_state() -> Dictionary:
 	data["used_smith_free_upgrades"] = used_smith_free_upgrades
 	data["merchant_purge_count"] = merchant_purge_count
 	data["is_night"] = is_night
+	data["time_shards"] = time_shards
 	data["forced_room_type"] = forced_room_type
+	data["floor_mutators"] = floor_mutators
+	data["current_floor_mutator"] = current_floor_mutator
+	data["last_floor_mutator"] = last_floor_mutator
 	data["map_nodes"] = map_nodes
 	data["map_edges"] = map_edges
 	data["map_lane_profiles"] = map_lane_profiles
@@ -1044,7 +1168,15 @@ func import_state(data: Dictionary) -> void:
 	used_smith_free_upgrades = int(data.get("used_smith_free_upgrades", 0))
 	merchant_purge_count = int(data.get("merchant_purge_count", 0))
 	is_night = bool(data.get("is_night", false))
+	time_shards = clampi(int(data.get("time_shards", starting_time_shards)), 0, max_time_shards)
 	forced_room_type = str(data.get("forced_room_type", ""))
+	var floor_mutators_any: Variant = data.get("floor_mutators", {})
+	if typeof(floor_mutators_any) == TYPE_DICTIONARY:
+		floor_mutators = (floor_mutators_any as Dictionary).duplicate(true)
+	else:
+		floor_mutators = {}
+	current_floor_mutator = str(data.get("current_floor_mutator", MUTATOR_NONE))
+	last_floor_mutator = str(data.get("last_floor_mutator", current_floor_mutator))
 	current_map_lane = int(data.get("current_map_lane", 1))
 
 	var map_any: Variant = data.get("map_nodes", {})
@@ -1056,10 +1188,11 @@ func import_state(data: Dictionary) -> void:
 	else:
 		map_nodes = {}
 	var map_edges_any: Variant = data.get("map_edges", [])
+	map_edges.clear()
 	if map_edges_any is Array:
-		map_edges = (map_edges_any as Array).duplicate(true)
-	else:
-		map_edges = []
+		for edge_any in map_edges_any:
+			if typeof(edge_any) == TYPE_DICTIONARY:
+				map_edges.append((edge_any as Dictionary).duplicate(true))
 	var map_profiles_any: Variant = data.get("map_lane_profiles", {})
 	if typeof(map_profiles_any) == TYPE_DICTIONARY:
 		map_lane_profiles = (map_profiles_any as Dictionary).duplicate(true)

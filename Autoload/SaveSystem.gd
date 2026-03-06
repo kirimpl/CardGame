@@ -18,7 +18,7 @@ func clear_save() -> void:
 func append_run_history(summary: Dictionary) -> void:
 	if summary.is_empty():
 		return
-	var history: Array[Dictionary] = _load_run_history()
+	var history: Array = _load_run_history()
 	var row: Dictionary = summary.duplicate(true)
 	row["saved_at_unix"] = Time.get_unix_time_from_system()
 	history.append(row)
@@ -27,11 +27,11 @@ func append_run_history(summary: Dictionary) -> void:
 	_store_run_history(history)
 
 
-func get_run_history(max_entries: int = 30) -> Array[Dictionary]:
-	var history: Array[Dictionary] = _load_run_history()
+func get_run_history(max_entries: int = 30) -> Array:
+	var history: Array = _load_run_history()
 	if history.is_empty():
 		return []
-	var out: Array[Dictionary] = []
+	var out: Array = []
 	var count: int = clampi(max_entries, 1, run_history_limit)
 	var start_idx: int = max(0, history.size() - count)
 	for i in range(start_idx, history.size()):
@@ -334,8 +334,8 @@ func _sim_dict_to_csv_row(floor: int, mode: String, data: Dictionary) -> String:
 	return "%d,%s,%d,%d,%.4f,%.4f,%.4f" % [floor, mode, runs, wins, winrate, avg_turns, avg_hp_left]
 
 
-func _load_run_history() -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
+func _load_run_history() -> Array:
+	var out: Array = []
 	if not FileAccess.file_exists(RUN_HISTORY_PATH):
 		return out
 	var f: FileAccess = FileAccess.open(RUN_HISTORY_PATH, FileAccess.READ)
@@ -351,7 +351,7 @@ func _load_run_history() -> Array[Dictionary]:
 	return out
 
 
-func _store_run_history(rows: Array[Dictionary]) -> void:
+func _store_run_history(rows: Array) -> void:
 	var f: FileAccess = FileAccess.open(RUN_HISTORY_PATH, FileAccess.WRITE)
 	if f == null:
 		return

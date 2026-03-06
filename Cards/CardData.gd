@@ -18,12 +18,14 @@ enum CardType { ATTACK, DEFENSE, BUFF }
 enum BuffKind { NONE, ENCHANT_ATTACK_EFFECT, APPLY_SELF_EFFECT }
 enum Rarity { COMMON, UNCOMMON, RARE, LEGENDARY }
 enum Stance { LEFT, CENTER, RIGHT }
+enum TimePhase { ANY, DAY_ONLY, NIGHT_ONLY }
 
 @export_group("Meta")
 @export var rarity: Rarity = Rarity.COMMON
 @export var can_appear_in_rewards: bool = true
 @export var can_appear_in_merchant: bool = true
 @export_range(1, 99, 1) var unlock_level: int = 1
+@export var time_phase: TimePhase = TimePhase.ANY
 
 @export_group("Buff")
 @export var buff_kind: BuffKind = BuffKind.NONE
@@ -49,6 +51,10 @@ enum Stance { LEFT, CENTER, RIGHT }
 @export var cards_to_draw: int = 0
 @export var cards_to_discard_random: int = 0
 @export var cards_to_exhaust_random: int = 0
+
+@export_group("Overheat")
+@export var overheat_gain: int = 0
+@export var overheat_vent: int = 0
 
 @export_group("Curse")
 @export var is_curse: bool = false

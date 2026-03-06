@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://Cards/CardData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "coolant_breath"
+title = "Coolant Breath"
+description = "Gain 6 block. Vent 5 Overheat."
+cost = 1
+defense = 6
+rarity = 1
+unlock_level = 4
+overheat_vent = 5
+upgraded_defense = 9
+

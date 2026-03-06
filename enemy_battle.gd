@@ -137,6 +137,7 @@ func _tick_effects_for_phase(phase: EffectData.TickWhen) -> void:
 				dot = int(round(float(hp) * (float(eff.value) / 100.0)))
 			else:
 				dot = max(0, int(eff.value) * max(1, stacks))
+			dot = int(round(float(dot) * RunManager.get_phase_dot_multiplier()))
 			if dot > 0:
 				hp = max(0, hp - dot)
 				emit_signal("damage_taken", dot, true)

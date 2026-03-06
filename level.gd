@@ -14,6 +14,14 @@ var forced_room_type: String = ""
 @export var enemy_overworld_scene: PackedScene = preload("res://Mob/EnemyOverworld.tscn")
 @export var card_view_scene: PackedScene = preload("res://UI/CardView.tscn")
 @export var rest_config: RestConfig = preload("res://Rest/Data/DefaultRestConfig.tres")
+@export_group("Rest Station Scenes")
+@export var campfire_scene: PackedScene
+@export var smith_scene: PackedScene
+@export var merchant_scene: PackedScene
+@export_group("Rest Station Icons (Fallback)")
+@export var campfire_icon: Texture2D
+@export var smith_icon: Texture2D
+@export var merchant_icon: Texture2D
 @export_range(0.0, 1.0, 0.01) var event_room_chance_early: float = 0.08
 @export_range(0.0, 1.0, 0.01) var event_room_chance_mid: float = 0.18
 @export_range(0.0, 1.0, 0.01) var event_room_chance_late: float = 0.14
@@ -48,6 +56,7 @@ var relic_tooltip_title: Label = null
 var relic_tooltip_desc: Label = null
 var relic_signature_cached: String = ""
 var save_exit_btn: Button = null
+var time_toggle_btn: Button = null
 
 
 func _ready() -> void:
@@ -62,6 +71,7 @@ func _ready() -> void:
 	_setup_popup_ui()
 	_setup_relic_panel()
 	_setup_save_exit_button()
+	_setup_time_toggle_button()
 	forced_room_type = RunManager.consume_forced_room_type()
 	if forced_room_type != "":
 		RunManager.forced_room_type = forced_room_type
@@ -119,14 +129,7 @@ func _setup_battle_state() -> void:
 
 
 func _open_random_event_now() -> void:
-	var roll: int = RunManager.rolli_range_run(0, 2)
-	match roll:
-		0:
-			_open_event_forgotten_shrine()
-		1:
-			_open_event_cursed_totem()
-		_:
-			_open_event_traveling_sage()
+	_open_time_weighted_event()
 
 
 func _setup_victory_state() -> void:
@@ -189,12 +192,19 @@ func _create_rest_station(station_name: String, world_pos: Vector2, tint: Color,
 	shape.position = Vector2(0.0, -38.0)
 	area.add_child(shape)
 
-	var sprite: Sprite2D = Sprite2D.new()
-	sprite.texture = RELIC_FALLBACK_ICON
-	sprite.modulate = tint
-	sprite.position = Vector2(0.0, -46.0)
-	sprite.scale = Vector2(0.6, 0.6)
-	area.add_child(sprite)
+	var station_scene: PackedScene = _get_rest_station_scene(station_name)
+	if station_scene != null:
+		var station_visual: Node = station_scene.instantiate()
+		if station_visual is Node2D:
+			(station_visual as Node2D).position = Vector2(0.0, -46.0)
+		area.add_child(station_visual)
+	else:
+		var sprite: Sprite2D = Sprite2D.new()
+		sprite.texture = _get_rest_station_icon(station_name)
+		sprite.modulate = tint
+		sprite.position = Vector2(0.0, -46.0)
+		sprite.scale = Vector2(0.6, 0.6)
+		area.add_child(sprite)
 
 	var label: Label = Label.new()
 	label.text = station_name
@@ -205,6 +215,31 @@ func _create_rest_station(station_name: String, world_pos: Vector2, tint: Color,
 	area.body_entered.connect(_on_station_body_entered.bind(station_name))
 	area.body_exited.connect(_on_station_body_exited.bind(station_name))
 	station_prompts[station_name] = prompt
+
+
+func _get_rest_station_icon(station_name: String) -> Texture2D:
+	match station_name:
+		"Campfire":
+			if campfire_icon != null:
+				return campfire_icon
+		"Smith":
+			if smith_icon != null:
+				return smith_icon
+		"Merchant":
+			if merchant_icon != null:
+				return merchant_icon
+	return RELIC_FALLBACK_ICON
+
+
+func _get_rest_station_scene(station_name: String) -> PackedScene:
+	match station_name:
+		"Campfire":
+			return campfire_scene
+		"Smith":
+			return smith_scene
+		"Merchant":
+			return merchant_scene
+	return null
 
 
 func _spawn_random_enemy() -> void:
@@ -275,15 +310,23 @@ func _try_start_event_room() -> bool:
 	var chance: float = _get_event_room_chance_for_floor(RunManager.current_floor)
 	if RunManager.rollf_run() >= chance:
 		return false
-	var roll: int = RunManager.rolli_range_run(0, 2)
-	match roll:
-		0:
-			_open_event_forgotten_shrine()
-		1:
-			_open_event_cursed_totem()
-		_:
-			_open_event_traveling_sage()
+	_open_time_weighted_event()
 	return true
+
+
+func _open_time_weighted_event() -> void:
+	var pool: Array[Callable] = [
+		Callable(self, "_open_event_forgotten_shrine"),
+		Callable(self, "_open_event_cursed_totem"),
+		Callable(self, "_open_event_traveling_sage"),
+	]
+	if RunManager.is_night:
+		pool.append(Callable(self, "_open_event_moon_altar"))
+	else:
+		pool.append(Callable(self, "_open_event_sunwell"))
+	var pick: Callable = RunManager.pick_from_array_run(pool)
+	if pick.is_valid():
+		pick.call()
 
 
 func _get_event_room_chance_for_floor(floor: int) -> float:
@@ -363,6 +406,41 @@ func _event_sage_cleanse() -> void:
 	RunManager.gold -= 20
 	var removed: bool = _remove_one_curse_from_deck()
 	_show_popup_notice("Curse removed." if removed else "No curses to remove.")
+
+
+func _open_event_sunwell() -> void:
+	RunManager.mark_event_seen("sunwell")
+	_show_popup_shell("Event: Sunwell")
+	var info: Label = Label.new()
+	info.text = "Daylight surges through the field."
+	popup_body.add_child(info)
+	_add_event_choice("Gain +1 Flux and heal 8 HP", Callable(self, "_event_sunwell_bless"))
+	_add_event_choice("Leave", Callable(self, "_close_popup"))
+
+
+func _event_sunwell_bless() -> void:
+	RunManager.time_shards = min(RunManager.max_time_shards, RunManager.time_shards + 1)
+	RunManager.current_hp = min(RunManager.max_hp, RunManager.current_hp + 8)
+	_show_popup_notice("You restored vitality and gained Flux.")
+
+
+func _open_event_moon_altar() -> void:
+	RunManager.mark_event_seen("moon_altar")
+	_show_popup_shell("Event: Moon Altar")
+	var info: Label = Label.new()
+	info.text = "A cold altar offers power at a cost."
+	popup_body.add_child(info)
+	_add_event_choice("Lose 7 HP, gain rare Night card", Callable(self, "_event_moon_altar_trade"))
+	_add_event_choice("Leave", Callable(self, "_close_popup"))
+
+
+func _event_moon_altar_trade() -> void:
+	RunManager.current_hp = max(1, RunManager.current_hp - 7)
+	var card: CardData = _pick_reward_card_by_rarity(CardData.Rarity.RARE)
+	if card != null:
+		card.time_phase = CardData.TimePhase.NIGHT_ONLY
+		RunManager.deck.append(card)
+	_show_popup_notice("The moon marks your deck.")
 
 
 func _add_event_choice(text: String, cb: Callable) -> void:
@@ -502,9 +580,12 @@ func _use_campfire() -> void:
 	var healed: int = RunManager.heal_from_campfire()
 	RunManager.add_run_stat("healing_done", float(healed))
 	RunManager.log_combat("Campfire healed %d HP on floor %d" % [healed, RunManager.current_floor])
-	RunManager.toggle_day_night()
+	var toggled: bool = RunManager.toggle_day_night(true)
 	campfire_used = true
 	_update_hud()
+	if not toggled:
+		_show_popup_notice("Recovered %d HP. Not enough Flux to switch time." % healed)
+		return
 	_show_popup_notice(
 		"Recovered %d HP (%.0f%% + %.0f%%). Time switched to %s." % [
 			healed,
@@ -976,6 +1057,29 @@ func _setup_save_exit_button() -> void:
 	hud.add_child(save_exit_btn)
 
 
+func _setup_time_toggle_button() -> void:
+	var hud: CanvasLayer = get_node_or_null("HUD")
+	if hud == null:
+		return
+	time_toggle_btn = Button.new()
+	time_toggle_btn.name = "TimeToggleButton"
+	time_toggle_btn.offset_left = 912.0
+	time_toggle_btn.offset_top = 6.0
+	time_toggle_btn.offset_right = 1042.0
+	time_toggle_btn.offset_bottom = 34.0
+	time_toggle_btn.text = "Toggle Time"
+	time_toggle_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	time_toggle_btn.pressed.connect(_on_time_toggle_pressed)
+	hud.add_child(time_toggle_btn)
+
+
+func _on_time_toggle_pressed() -> void:
+	if not RunManager.toggle_day_night(true):
+		_show_popup_notice("Not enough Flux.")
+		return
+	_update_hud()
+
+
 func _on_save_exit_pressed() -> void:
 	SaveSystem.save_run()
 	get_tree().change_scene_to_file("res://menu.tscn")
@@ -1003,9 +1107,9 @@ func _update_hud() -> void:
 	if gold_label != null:
 		gold_label.text = "Gold: %d" % int(RunManager.gold)
 	if floor_label != null:
-		floor_label.text = "Floor: %d" % int(RunManager.current_floor)
+		floor_label.text = "Floor: %d | %s" % [int(RunManager.current_floor), RunManager.get_current_floor_mutator_display()]
 	if day_label != null:
-		day_label.text = "Time: %s" % _time_of_day_text()
+		day_label.text = "Time: %s | Flux: %d" % [_time_of_day_text(), int(RunManager.time_shards)]
 	_refresh_relic_panel()
 
 

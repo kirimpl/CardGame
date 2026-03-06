@@ -57,6 +57,18 @@ func _update_visuals() -> void:
 
 	if desc_label:
 		var d: String = card_data.get_description()
+		if card_data.time_phase == CardData.TimePhase.DAY_ONLY:
+			d += "\nPhase: Day only"
+		elif card_data.time_phase == CardData.TimePhase.NIGHT_ONLY:
+			d += "\nPhase: Night only"
+		if card_data.required_stance >= 0:
+			d += "\nRequires stance: " + _stance_name(int(card_data.required_stance))
+		if card_data.set_stance_on_play >= 0:
+			d += "\nSet stance: " + _stance_name(int(card_data.set_stance_on_play))
+		if card_data.overheat_gain > 0:
+			d += "\nOverheat: +%d" % card_data.overheat_gain
+		if card_data.overheat_vent > 0:
+			d += "\nVent: -%d Overheat" % card_data.overheat_vent
 		if not card_data.is_playable():
 			d += "\nUnplayable"
 		if card_data.get_cards_to_draw() > 0:
@@ -126,6 +138,16 @@ func _process(delta: float) -> void:
 		position = position.lerp(target_position, lerp_speed * delta)
 		rotation_degrees = lerp(rotation_degrees, target_rotation, lerp_speed * delta)
 		scale = scale.lerp(target_scale, lerp_speed * delta)
+
+
+func _stance_name(stance: int) -> String:
+	match stance:
+		CardData.Stance.LEFT:
+			return "Left"
+		CardData.Stance.RIGHT:
+			return "Right"
+		_:
+			return "Center"
 
 func _on_mouse_entered() -> void:
 	is_hovered = true

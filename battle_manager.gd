@@ -101,11 +101,19 @@ var last_player_hp_display: int = -1
 var last_player_block_display: int = -1
 var stance_label: Label = null
 var echo_label: Label = null
+var mutator_label: Label = null
+var overheat_label: Label = null
+var time_toggle_btn: Button = null
 var echo_counters: Dictionary = {
 	"ATTACK": 0,
 	"DEFENSE": 0,
 	"BUFF": 0,
 }
+var first_skill_free_used: bool = false
+var first_attack_bonus_used: bool = false
+var player_overheat: int = 0
+@export var overheat_threshold: int = 10
+@export var overheat_penalty_damage: int = 4
 
 
 func _ready() -> void:
@@ -119,6 +127,7 @@ func _ready() -> void:
 	_setup_player_status_row()
 	_setup_status_tooltip()
 	_setup_stance_echo_ui()
+	_setup_time_toggle_button()
 	_setup_combat_log_ui()
 	_setup_damage_preview_ui()
 	_setup_save_exit_button()
@@ -340,7 +349,7 @@ func _update_ui() -> void:
 	if ui_turn_label != null:
 		ui_turn_label.text = "Turn: %d" % turn_number
 	if ui_time_label != null:
-		ui_time_label.text = "Time: %s" % ("Night" if RunManager.is_night else "Day")
+		ui_time_label.text = "Time: %s | Flux: %d" % [("Night" if RunManager.is_night else "Day"), int(RunManager.time_shards)]
 	if stance_label != null:
 		stance_label.text = "Stance: %s" % _stance_name(player_stance)
 	if echo_label != null:
@@ -349,6 +358,10 @@ func _update_ui() -> void:
 			int(echo_counters.get("DEFENSE", 0)),
 			int(echo_counters.get("BUFF", 0)),
 		]
+	if mutator_label != null:
+		mutator_label.text = RunManager.get_current_floor_mutator_display()
+	if overheat_label != null:
+		overheat_label.text = "Overheat: %d/%d" % [player_overheat, overheat_threshold]
 
 	_refresh_relic_panel()
 	_refresh_player_effects_ui()
@@ -519,6 +532,49 @@ func _setup_stance_echo_ui() -> void:
 	echo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	echo_label.add_theme_color_override("font_color", Color(0.7, 0.92, 1.0, 1.0))
 	ui_root.add_child(echo_label)
+
+	mutator_label = Label.new()
+	mutator_label.name = "MutatorLabel"
+	mutator_label.offset_left = 470.0
+	mutator_label.offset_top = 58.0
+	mutator_label.offset_right = 1020.0
+	mutator_label.offset_bottom = 82.0
+	mutator_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mutator_label.add_theme_color_override("font_color", Color(0.86, 0.78, 0.65, 1.0))
+	ui_root.add_child(mutator_label)
+
+	overheat_label = Label.new()
+	overheat_label.name = "OverheatLabel"
+	overheat_label.offset_left = 26.0
+	overheat_label.offset_top = 58.0
+	overheat_label.offset_right = 320.0
+	overheat_label.offset_bottom = 82.0
+	overheat_label.add_theme_color_override("font_color", Color(1.0, 0.58, 0.32, 1.0))
+	ui_root.add_child(overheat_label)
+
+
+func _setup_time_toggle_button() -> void:
+	time_toggle_btn = Button.new()
+	time_toggle_btn.name = "TimeToggleBtn"
+	time_toggle_btn.anchor_left = 0.0
+	time_toggle_btn.anchor_top = 0.0
+	time_toggle_btn.anchor_right = 0.0
+	time_toggle_btn.anchor_bottom = 0.0
+	time_toggle_btn.offset_left = 330.0
+	time_toggle_btn.offset_top = 6.0
+	time_toggle_btn.offset_right = 456.0
+	time_toggle_btn.offset_bottom = 34.0
+	time_toggle_btn.text = "Toggle Time"
+	time_toggle_btn.pressed.connect(_on_time_toggle_pressed)
+	ui_root.add_child(time_toggle_btn)
+
+
+func _on_time_toggle_pressed() -> void:
+	if not RunManager.toggle_day_night(true):
+		_log_turn_action("System", "TimeToggle", "Not enough Flux")
+		return
+	_log_turn_action("System", "TimeToggle", "Switched to %s" % ("Night" if RunManager.is_night else "Day"))
+	_update_ui()
 
 
 func _setup_player_status_row() -> void:
@@ -792,6 +848,9 @@ func _setup_deck() -> void:
 	turn_number = 1
 	player_turns_started = 0
 	player_stance = CardData.Stance.CENTER
+	player_overheat = 0
+	first_skill_free_used = false
+	first_attack_bonus_used = false
 	echo_counters["ATTACK"] = 0
 	echo_counters["DEFENSE"] = 0
 	echo_counters["BUFF"] = 0
@@ -842,6 +901,8 @@ func _start_turn() -> void:
 func _start_player_turn_setup() -> void:
 	player_turns_started += 1
 	turn_number = player_turns_started
+	first_skill_free_used = false
+	first_attack_bonus_used = false
 	_log_turn_action("System", "TurnStart", "Player turn")
 	energy = energy_max
 	player_defense = 0
@@ -902,6 +963,17 @@ func _update_energy_ui() -> void:
 		ui_energy_orb_label.text = "%d/%d" % [energy, energy_max]
 
 
+func _get_effective_card_cost(card: CardData) -> int:
+	if card == null:
+		return 0
+	var base_cost: int = card.get_cost()
+	if RunManager.get_current_floor_mutator() == RunManager.MUTATOR_FIRST_SKILL_FREE:
+		var is_skill: bool = card.get_card_type() != CardData.CardType.ATTACK
+		if is_skill and not first_skill_free_used:
+			return 0
+	return base_cost
+
+
 func _stance_name(stance: int) -> String:
 	match stance:
 		CardData.Stance.LEFT:
@@ -945,6 +1017,31 @@ func _apply_echo_if_ready(card_type: CardData.CardType) -> void:
 		echo_counters[key] = current
 
 
+func _apply_overheat_from_card(card: CardData) -> void:
+	if card == null:
+		return
+	var gain: int = max(0, card.overheat_gain)
+	var vent: int = max(0, card.overheat_vent)
+	player_overheat = max(0, player_overheat + gain - vent)
+	if gain > 0:
+		_log_turn_action("System", "Overheat", "+%d (now %d)" % [gain, player_overheat])
+	if vent > 0:
+		_log_turn_action("System", "Overheat", "-%d vent (now %d)" % [vent, player_overheat])
+
+
+func _apply_effect_to_enemy_target(target: Node2D, effect: EffectData, duration: int, stacks: int) -> void:
+	if target == null or effect == null or duration <= 0:
+		return
+	var final_duration: int = max(1, duration)
+	if RunManager.is_night:
+		final_duration = max(1, int(ceil(float(final_duration) * RunManager.get_phase_debuff_multiplier())))
+	var final_stacks: int = max(1, stacks)
+	if RunManager.get_current_floor_mutator() == RunManager.MUTATOR_BLEED_X2 and effect.id == "bleed":
+		final_stacks *= 2
+	for _i in range(final_stacks):
+		target.apply_effect(effect, final_duration)
+
+
 func _on_card_played(card: CardData) -> void:
 	if busy or not player_turn:
 		return
@@ -953,7 +1050,8 @@ func _on_card_played(card: CardData) -> void:
 	if card.required_stance >= 0 and int(card.required_stance) != player_stance:
 		_log_turn_action("Player", "CardBlocked", "%s requires %s stance" % [card.get_display_title(), _stance_name(int(card.required_stance))])
 		return
-	if energy < card.get_cost():
+	var effective_cost: int = _get_effective_card_cost(card)
+	if energy < effective_cost:
 		return
 	if _should_request_target(card):
 		pending_target_card = card
@@ -968,8 +1066,12 @@ func _play_card(card: CardData, forced_target: Node2D = null) -> void:
 	_log_turn_action("Player", "PlayCard", card.get_display_title())
 	RunManager.mark_card_seen(card.id)
 
-	var card_cost: int = card.get_cost()
+	var card_cost: int = _get_effective_card_cost(card)
 	var card_damage: int = card.get_damage() + card.get_stance_damage_bonus(player_stance)
+	if RunManager.get_current_floor_mutator() == RunManager.MUTATOR_FIRST_ATTACK_BONUS and card.get_card_type() == CardData.CardType.ATTACK and not first_attack_bonus_used:
+		card_damage += 3
+		first_attack_bonus_used = true
+		_log_turn_action("System", "Mutator", "First attack gained +3 damage")
 	var card_defense: int = card.get_defense() + card.get_stance_defense_bonus(player_stance)
 	var card_effect: EffectData = card.get_effect()
 	var card_buff_effect: EffectData = card.get_buff_effect()
@@ -977,10 +1079,12 @@ func _play_card(card: CardData, forced_target: Node2D = null) -> void:
 	var played_type: CardData.CardType = card.get_card_type()
 
 	energy -= card_cost
+	if RunManager.get_current_floor_mutator() == RunManager.MUTATOR_FIRST_SKILL_FREE and card.get_card_type() != CardData.CardType.ATTACK and not first_skill_free_used:
+		first_skill_free_used = true
 	_update_energy_ui()
 
 	if card_defense > 0:
-		var defense_mult: float = _get_player_block_multiplier()
+		var defense_mult: float = _get_player_block_multiplier() * RunManager.get_phase_block_multiplier()
 		player_defense += int(round(float(card_defense) * defense_mult))
 
 	if card.get_card_type() == CardData.CardType.BUFF and card.buff_kind == CardData.BuffKind.ENCHANT_ATTACK_EFFECT:
@@ -1028,10 +1132,10 @@ func _play_card(card: CardData, forced_target: Node2D = null) -> void:
 				if card.has_method("has_effect") and card.has_effect() and t.has_method("apply_effect") and card_effect != null:
 					var eff_dur: int = card.get_effect_durability()
 					if eff_dur > 0:
-						t.apply_effect(card_effect, eff_dur)
+						_apply_effect_to_enemy_target(t, card_effect, eff_dur, 1)
 						RunManager.add_run_stat("effects_applied", 1.0)
 				if enchant_attack_charges > 0 and enchant_effect != null and t.has_method("apply_effect"):
-					t.apply_effect(enchant_effect, enchant_effect_durability)
+					_apply_effect_to_enemy_target(t, enchant_effect, enchant_effect_durability, 1)
 					RunManager.add_run_stat("effects_applied", 1.0)
 			if enchant_attack_charges > 0 and enchant_effect != null:
 				enchant_attack_charges -= 1
@@ -1041,7 +1145,7 @@ func _play_card(card: CardData, forced_target: Node2D = null) -> void:
 		for t in targets:
 			if is_instance_valid(t) and t.has_method("apply_effect"):
 				var eff_dur: int = max(1, card.get_effect_durability())
-				t.apply_effect(card_effect, eff_dur)
+				_apply_effect_to_enemy_target(t, card_effect, eff_dur, 1)
 				RunManager.add_run_stat("effects_applied", 1.0)
 
 	var idx: int = hand.find(card)
@@ -1053,6 +1157,7 @@ func _play_card(card: CardData, forced_target: Node2D = null) -> void:
 		discard_pile.append(card)
 
 	await _apply_post_play_manipulation(card)
+	_apply_overheat_from_card(card)
 	if card.set_stance_on_play >= 0:
 		_set_player_stance(int(card.set_stance_on_play))
 	await _apply_echo_if_ready(played_type)
@@ -1110,6 +1215,9 @@ func _on_enemy_dead() -> void:
 	RunManager.pending_gold = rolled_gold
 	if player_effects.has("regeneration"):
 		var heal: int = _get_player_effect_value("regeneration")
+		heal = int(round(float(heal) * RunManager.get_phase_heal_multiplier()))
+		if RunManager.get_current_floor_mutator() == RunManager.MUTATOR_HEAL_HALF:
+			heal = int(round(float(heal) * 0.5))
 		RunManager.current_hp = min(RunManager.max_hp, RunManager.current_hp + heal)
 		RunManager.add_run_stat("healing_done", float(heal))
 	player_effects.clear()
@@ -1144,6 +1252,20 @@ func _on_end_turn_pressed() -> void:
 	_set_buttons_enabled(false)
 
 	await _tick_end_turn_effects()
+	if player_overheat >= overheat_threshold:
+		var penalty: int = max(1, overheat_penalty_damage)
+		RunManager.current_hp = max(0, int(RunManager.current_hp) - penalty)
+		RunManager.add_run_stat("damage_taken", float(penalty))
+		_spawn_damage_popup(_get_player_popup_position(), penalty, true)
+		_log_turn_action("System", "OverheatPenalty", "Player took %d" % penalty)
+		player_overheat = max(0, player_overheat - 3)
+		if int(RunManager.current_hp) <= 0:
+			if RunManager.try_trigger_relic_revive():
+				_update_ui()
+			else:
+				RunManager.add_run_stat("fights_lost", 1.0)
+				RunManager.finish_run(false, "Overheated")
+				return
 	if _tick_player_effects(EffectData.TickWhen.END_TURN):
 		return
 	_update_ui()
@@ -1416,6 +1538,10 @@ func _on_enemy_apply_player_effects(payloads: Array) -> void:
 			continue
 		var dur: int = int(payload.get("duration", 1))
 		var stacks: int = int(payload.get("stacks", 1))
+		if RunManager.is_night:
+			dur = max(1, int(ceil(float(dur) * RunManager.get_phase_debuff_multiplier())))
+		if RunManager.get_current_floor_mutator() == RunManager.MUTATOR_BLEED_X2 and effect.id == "bleed":
+			stacks *= 2
 		_apply_player_effect(effect, max(1, dur), max(1, stacks))
 		RunManager.add_run_stat("effects_applied", 1.0)
 		_log_turn_action("Enemy", "ApplyEffect", effect.title if effect.title != "" else effect.id)
@@ -1573,6 +1699,7 @@ func _tick_player_effects(phase: EffectData.TickWhen) -> bool:
 				dot = int(round(float(RunManager.current_hp) * (float(eff.value) / 100.0)))
 			else:
 				dot = max(0, int(eff.value) * max(1, stacks))
+			dot = int(round(float(dot) * RunManager.get_phase_dot_multiplier()))
 			if dot > 0:
 				RunManager.current_hp = max(0, int(RunManager.current_hp) - dot)
 				_spawn_damage_popup(_get_player_popup_position(), dot, true)
