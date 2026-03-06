@@ -3,6 +3,9 @@ extends Node
 const SAVE_PATH: String = "user://run_save.json"
 const SIM_CSV_PATH: String = "user://sim_report.csv"
 const RUN_HISTORY_PATH: String = "user://run_history.json"
+const COMBAT_LOG_PATH: String = "user://combat_log_last.txt"
+const REPLAY_LOG_PATH: String = "user://replay_last.json"
+const SAVE_VERSION: int = 2
 @export_range(10, 500, 10) var run_history_limit: int = 120
 
 
@@ -47,6 +50,7 @@ func save_run() -> bool:
 		meta.call("save_profile")
 
 	var payload: Dictionary = {}
+	payload["schema_version"] = SAVE_VERSION
 	payload["saved_at_unix"] = Time.get_unix_time_from_system()
 	payload["scene_path"] = _get_current_scene_path()
 	payload["run_state"] = RunManager.export_state()
@@ -78,7 +82,7 @@ func load_run() -> bool:
 	if typeof(parsed) != TYPE_DICTIONARY:
 		push_error("SaveSystem: invalid save payload")
 		return false
-	var payload: Dictionary = parsed
+	var payload: Dictionary = _migrate_payload(parsed as Dictionary)
 	var run_state_any: Variant = payload.get("run_state", {})
 	if typeof(run_state_any) != TYPE_DICTIONARY:
 		push_error("SaveSystem: missing run_state")
@@ -98,6 +102,50 @@ func load_run() -> bool:
 
 	get_tree().call_deferred("change_scene_to_file", scene_path)
 	return true
+
+
+func export_combat_log(max_entries: int = 240) -> String:
+	var events: Array[Dictionary] = RunManager.get_combat_events_tail(max_entries, "ALL")
+	var lines: PackedStringArray = PackedStringArray()
+	lines.append("Combat Log Export")
+	lines.append("Floor: %d | Act: %d | Seed: %d" % [RunManager.current_floor, RunManager.current_act, RunManager.get_run_seed()])
+	lines.append("")
+	for ev in events:
+		lines.append(
+			"Turn %d | %s | %s | %s | %s" % [
+				int(ev.get("turn", 0)),
+				str(ev.get("category", "SYSTEM")),
+				str(ev.get("actor", "System")),
+				str(ev.get("action", "")),
+				str(ev.get("result", "")),
+			]
+		)
+	var file: FileAccess = FileAccess.open(COMBAT_LOG_PATH, FileAccess.WRITE)
+	if file == null:
+		return ""
+	file.store_string("\n".join(lines))
+	file.flush()
+	file.close()
+	return COMBAT_LOG_PATH
+
+
+func export_replay_log(max_entries: int = 2000) -> String:
+	var replay_events: Array[Dictionary] = RunManager.get_replay_events_tail(max_entries)
+	var payload: Dictionary = {
+		"schema_version": SAVE_VERSION,
+		"saved_at_unix": Time.get_unix_time_from_system(),
+		"floor": RunManager.current_floor,
+		"act": RunManager.current_act,
+		"seed": RunManager.get_run_seed(),
+		"events": replay_events,
+	}
+	var file: FileAccess = FileAccess.open(REPLAY_LOG_PATH, FileAccess.WRITE)
+	if file == null:
+		return ""
+	file.store_string(JSON.stringify(payload, "\t"))
+	file.flush()
+	file.close()
+	return REPLAY_LOG_PATH
 
 
 func simulate_runs(count: int = 100) -> Dictionary:
@@ -358,3 +406,32 @@ func _store_run_history(rows: Array) -> void:
 	f.store_string(JSON.stringify(rows, "\t"))
 	f.flush()
 	f.close()
+
+
+func _migrate_payload(payload: Dictionary) -> Dictionary:
+	var out: Dictionary = payload.duplicate(true)
+	var ver: int = int(out.get("schema_version", 1))
+	if ver >= SAVE_VERSION:
+		return out
+
+	var run_state_any: Variant = out.get("run_state", {})
+	if typeof(run_state_any) != TYPE_DICTIONARY:
+		out["run_state"] = {}
+	else:
+		var rs: Dictionary = run_state_any as Dictionary
+		if not rs.has("combat_events"):
+			rs["combat_events"] = []
+		if not rs.has("replay_events"):
+			rs["replay_events"] = []
+		if not rs.has("floor_mutators"):
+			rs["floor_mutators"] = {}
+		if not rs.has("current_floor_mutator"):
+			rs["current_floor_mutator"] = "NONE"
+		if not rs.has("last_floor_mutator"):
+			rs["last_floor_mutator"] = "NONE"
+		if not rs.has("time_shards"):
+			rs["time_shards"] = 0
+		out["run_state"] = rs
+
+	out["schema_version"] = SAVE_VERSION
+	return out

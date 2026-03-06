@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="BalanceConfig" format=3]
+
+[ext_resource type="Script" path="res://Config/BalanceConfig.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+xp_floor_mult = 8
+xp_fight_win = 12
+xp_effect_applied_mult = 0.8
+xp_effect_damage_mult = 0.15
+xp_heal_mult = 0.2
+xp_victory_bonus = 50
+xp_defeat_multiplier = 0.45
+xp_minimum = 6
+starting_time_shards = 1
+max_time_shards = 4
+shards_per_floor = 1
+time_toggle_cost = 1
+night_dot_multiplier = 1.15
+night_debuff_multiplier = 1.1
+day_block_multiplier = 1.15
+day_heal_multiplier = 1.15
+mutator_none_weight = 0.4
+mutator_bleed_x2_weight = 0.18
+mutator_heal_half_weight = 0.12
+mutator_first_skill_free_weight = 0.2
+mutator_first_attack_bonus_weight = 0.1
+

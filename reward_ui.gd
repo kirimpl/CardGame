@@ -89,7 +89,7 @@ func _try_grant_relic_reward() -> void:
 	if candidates.is_empty():
 		return
 
-	var picked: RelicData = candidates.pick_random() as RelicData
+	var picked: RelicData = RunManager.pick_from_array_run(candidates) as RelicData
 	if picked == null:
 		return
 
@@ -137,7 +137,7 @@ func _generate_card_rewards() -> void:
 		var picked_rarity: CardData.Rarity = _pick_rarity_for_reward(RunManager.current_enemy_is_elite)
 		var card_data: CardData = _pick_card_of_rarity(available_cards, picked_rarity)
 		if card_data == null:
-			card_data = available_cards.pick_random() as CardData
+			card_data = _pick_weighted_reward_card(available_cards)
 		if card_data == null:
 			break
 		if picked_ids.has(card_data.id):
@@ -195,7 +195,58 @@ func _pick_card_of_rarity(pool: Array[CardData], rarity: CardData.Rarity) -> Car
 	if filtered.is_empty():
 		return null
 
-	return filtered.pick_random() as CardData
+	return _pick_weighted_reward_card(filtered)
+
+
+func _pick_weighted_reward_card(pool: Array[CardData]) -> CardData:
+	if pool.is_empty():
+		return null
+	var deck_ids: Dictionary = {}
+	var burn_bias: int = 0
+	var bleed_bias: int = 0
+	var block_bias: int = 0
+	for c in RunManager.deck:
+		if c == null:
+			continue
+		deck_ids[str(c.id)] = int(deck_ids.get(str(c.id), 0)) + 1
+		if c.has_effect():
+			var eid: String = c.get_effect_id()
+			if eid == "burn":
+				burn_bias += 1
+			elif eid == "bleed":
+				bleed_bias += 1
+		if c.get_defense() > 0:
+			block_bias += 1
+
+	var weights: Array[float] = []
+	var total: float = 0.0
+	for c in pool:
+		if c == null:
+			weights.append(0.0)
+			continue
+		var w: float = 1.0
+		var dup_count: int = int(deck_ids.get(c.id, 0))
+		if dup_count > 0:
+			w *= 0.6 / float(dup_count + 1)
+		if c.has_effect():
+			var eid: String = c.get_effect_id()
+			if eid == "burn":
+				w *= (1.0 + minf(0.3, float(burn_bias) * 0.05))
+			elif eid == "bleed":
+				w *= (1.0 + minf(0.3, float(bleed_bias) * 0.05))
+		if c.get_defense() > 0:
+			w *= (1.0 + minf(0.25, float(block_bias) * 0.04))
+		weights.append(w)
+		total += w
+
+	if total <= 0.0:
+		return RunManager.pick_from_array_run(pool) as CardData
+	var roll: float = RunManager.rollf_run() * total
+	for i in range(pool.size()):
+		roll -= weights[i]
+		if roll <= 0.0:
+			return pool[i]
+	return pool[pool.size() - 1]
 
 
 func _filter_reward_cards(source: Array[CardData]) -> Array[CardData]:

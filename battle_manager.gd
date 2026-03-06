@@ -1,6 +1,8 @@
 extends Node2D
 
 const RELIC_FALLBACK_ICON: Texture2D = preload("res://icon.svg")
+const EffectKeysRes = preload("res://Combat/EffectKeys.gd")
+const StatusSystemRes = preload("res://Combat/StatusSystem.gd")
 
 @export var player_scene: PackedScene
 @export var enemy_scene: PackedScene
@@ -95,6 +97,8 @@ var combat_log_panel: PanelContainer = null
 var combat_log_text: RichTextLabel = null
 var combat_log_toggle_btn: Button = null
 var combat_log_filter: OptionButton = null
+var combat_log_export_btn: Button = null
+var replay_export_btn: Button = null
 var save_exit_btn: Button = null
 var damage_preview_label: Label = null
 var last_player_hp_display: int = -1
@@ -314,13 +318,17 @@ func _update_ui() -> void:
 				EnemyData.Intent.BUFF:
 					p = "BUFF"
 				EnemyData.Intent.DEBUFF:
-					p = "Debuff"
+					p = e.get_intent_payload_text() if e.has_method("get_intent_payload_text") else "Debuff"
 			if p != "":
 				intent_parts.append(p)
 		if pending_target_card != null:
 			ui_enemy_intent.text = "Choose target for: %s (RMB cancel)" % pending_target_card.get_display_title()
 		else:
-			ui_enemy_intent.text = "Intent: %s" % " | ".join(intent_parts)
+			var lethal_warn: String = _build_lethal_warning_text()
+			var intent_text: String = "Intent: %s" % " | ".join(intent_parts)
+			if lethal_warn != "":
+				intent_text += "  " + lethal_warn
+			ui_enemy_intent.text = intent_text
 
 		if focus_enemy.has_method("get_effect_details"):
 			var effs: Dictionary = focus_enemy.get_effect_details()
@@ -337,6 +345,8 @@ func _update_ui() -> void:
 					var dur: int = int(d.get("duration", 0))
 					var title: String = str(d.get("title", k))
 					var desc: String = str(d.get("description", ""))
+					var stack_model: int = int(d.get("stack_model", EffectData.StackModel.DURATION))
+					desc += "\nStack: %s" % _stack_model_name(stack_model)
 					var l: Label = Label.new()
 					l.text = "%s x%d" % [title, stacks]
 					if dur > 0:
@@ -675,6 +685,21 @@ func _setup_combat_log_ui() -> void:
 	combat_log_filter.item_selected.connect(_on_combat_log_filter_changed)
 	vbox.add_child(combat_log_filter)
 
+	var export_row: HBoxContainer = HBoxContainer.new()
+	export_row.alignment = BoxContainer.ALIGNMENT_END
+	export_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(export_row)
+
+	combat_log_export_btn = Button.new()
+	combat_log_export_btn.text = "Export Log"
+	combat_log_export_btn.pressed.connect(_on_export_combat_log_pressed)
+	export_row.add_child(combat_log_export_btn)
+
+	replay_export_btn = Button.new()
+	replay_export_btn.text = "Export Replay"
+	replay_export_btn.pressed.connect(_on_export_replay_pressed)
+	export_row.add_child(replay_export_btn)
+
 	var scroll: ScrollContainer = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(scroll)
@@ -721,6 +746,22 @@ func _on_combat_log_toggle_pressed() -> void:
 
 func _on_combat_log_filter_changed(_idx: int) -> void:
 	_refresh_combat_log_ui()
+
+
+func _on_export_combat_log_pressed() -> void:
+	var path: String = SaveSystem.export_combat_log(240)
+	if path == "":
+		_append_combat_log("System | Export | combat log export failed")
+	else:
+		_append_combat_log("System | Export | combat log -> %s" % path)
+
+
+func _on_export_replay_pressed() -> void:
+	var path: String = SaveSystem.export_replay_log(2000)
+	if path == "":
+		_append_combat_log("System | Export | replay export failed")
+	else:
+		_append_combat_log("System | Export | replay -> %s" % path)
 
 
 func _setup_save_exit_button() -> void:
@@ -1000,6 +1041,16 @@ func _stance_name(stance: int) -> String:
 			return "Center"
 
 
+func _stack_model_name(model: int) -> String:
+	match model:
+		EffectData.StackModel.INTENSITY:
+			return "Intensity"
+		EffectData.StackModel.UNIQUE:
+			return "Unique (refresh)"
+		_:
+			return "Duration"
+
+
 func _set_player_stance(new_stance: int) -> void:
 	player_stance = clampi(new_stance, CardData.Stance.LEFT, CardData.Stance.RIGHT)
 	_log_turn_action("Player", "Stance", "Changed to %s" % _stance_name(player_stance))
@@ -1135,7 +1186,7 @@ func _play_card(card: CardData, forced_target: Node2D = null) -> void:
 			if player.has_method("attack_sequence"):
 				await player.call("attack_sequence", targets[0])
 
-			var dmg_bonus: int = _get_player_effect_value("strength_surge")
+			var dmg_bonus: int = _get_player_effect_value(EffectKeysRes.STRENGTH_SURGE)
 			var outgoing_mult: float = _get_player_outgoing_damage_multiplier()
 			for t in targets:
 				if not is_instance_valid(t) or not t.has_method("take_damage"):
@@ -1233,8 +1284,8 @@ func _on_enemy_dead() -> void:
 	rolled_gold = int(round(float(rolled_gold) * RunManager.get_floor_gold_multiplier(RunManager.current_floor)))
 	rolled_gold = max(1, rolled_gold)
 	RunManager.pending_gold = rolled_gold
-	if player_effects.has("regeneration"):
-		var heal: int = _get_player_effect_value("regeneration")
+	if player_effects.has(EffectKeysRes.REGENERATION):
+		var heal: int = _get_player_effect_value(EffectKeysRes.REGENERATION)
 		heal = int(round(float(heal) * RunManager.get_phase_heal_multiplier()))
 		if RunManager.get_current_floor_mutator() == RunManager.MUTATOR_HEAL_HALF:
 			heal = int(round(float(heal) * 0.5))
@@ -1321,7 +1372,7 @@ func _on_enemy_hit_player(_target: Node, source_enemy: Node2D) -> void:
 
 	var taken: int = max(0, dmg - player_defense)
 	player_defense = max(0, player_defense - dmg)
-	if player_effects.has("parry") and taken > 0 and is_instance_valid(source_enemy) and source_enemy.has_method("take_damage"):
+	if player_effects.has(EffectKeysRes.PARRY) and taken > 0 and is_instance_valid(source_enemy) and source_enemy.has_method("take_damage"):
 		var prevented: int = int(round(float(taken) * 0.25))
 		var reflect: int = prevented
 		taken = max(0, taken - prevented)
@@ -1459,14 +1510,39 @@ func _refresh_damage_preview() -> void:
 	if target == null:
 		damage_preview_label.visible = false
 		return
+	var stance_bonus: int = pending_target_card.get_stance_damage_bonus(player_stance)
+	var strength_bonus: int = _get_player_effect_value(EffectKeysRes.STRENGTH_SURGE)
+	var mutator_bonus: int = 0
+	if RunManager.get_current_floor_mutator() == RunManager.MUTATOR_FIRST_ATTACK_BONUS and pending_target_card.get_card_type() == CardData.CardType.ATTACK and not first_attack_bonus_used:
+		mutator_bonus = 3
 	var outgoing_mult: float = _get_player_outgoing_damage_multiplier()
-	var bonus: int = _get_player_effect_value("strength_surge")
-	var predicted: int = max(0, int(round(float(card_damage + bonus) * outgoing_mult)))
+	var raw_total: int = card_damage + stance_bonus + strength_bonus + mutator_bonus
+	var predicted: int = max(0, int(round(float(raw_total) * outgoing_mult)))
 	var target_name: String = "Enemy"
 	if "data" in target and target.data != null:
 		target_name = str(target.data.name)
-	damage_preview_label.text = "Preview: %s will take %d" % [target_name, predicted]
+	damage_preview_label.text = "Preview %s: %d (base %d + stance %d + str %d + mut %d)" % [target_name, predicted, card_damage, stance_bonus, strength_bonus, mutator_bonus]
 	damage_preview_label.visible = true
+
+
+func _build_lethal_warning_text() -> String:
+	if not player_turn:
+		return ""
+	var incoming: int = 0
+	for e in _get_alive_enemies():
+		if not ("current_intent" in e):
+			continue
+		if int(e.current_intent) != EnemyData.Intent.ATTACK:
+			continue
+		var d: int = int(e.get_effective_attack_damage()) if e.has_method("get_effective_attack_damage") else int(e.damage)
+		incoming += d
+	if incoming <= 0:
+		return ""
+	var estimated_taken: int = max(0, incoming - player_defense)
+	var hp_now: int = int(RunManager.current_hp)
+	if estimated_taken >= hp_now:
+		return "[LETHAL %d]" % estimated_taken
+	return ""
 
 
 func _get_player_popup_position() -> Vector2:
@@ -1695,25 +1771,7 @@ func _render_pile_cards(cards: Array[CardData]) -> void:
 
 
 func _apply_player_effect(effect: EffectData, durability: int, stacks: int = 1) -> void:
-	if effect == null or effect.id == "":
-		return
-	var id: String = effect.id
-	var e: Dictionary = player_effects.get(id, {})
-	if e.is_empty():
-		e = {"data": effect, "dur": durability, "stacks": max(1, stacks)}
-	else:
-		e["data"] = effect
-		match effect.stack_model:
-			EffectData.StackModel.INTENSITY:
-				e["stacks"] = int(e.get("stacks", 0)) + max(1, stacks)
-				e["dur"] = max(int(e.get("dur", 0)), durability)
-			EffectData.StackModel.UNIQUE:
-				e["stacks"] = 1
-				e["dur"] = max(int(e.get("dur", 0)), durability)
-			_:
-				e["stacks"] = 1
-				e["dur"] = int(e.get("dur", 0)) + durability
-	player_effects[id] = e
+	StatusSystemRes.apply_effect(player_effects, effect, durability, stacks)
 
 
 func _tick_player_effects(phase: EffectData.TickWhen) -> bool:
@@ -1779,6 +1837,8 @@ func _refresh_player_effects_ui() -> void:
 		var dur: int = int(d.get("duration", 0))
 		var title: String = str(d.get("title", id))
 		var desc: String = str(d.get("description", ""))
+		var stack_model: int = int(d.get("stack_model", EffectData.StackModel.DURATION))
+		desc += "\nStack: %s" % _stack_model_name(stack_model)
 		l.text = "%s" % title
 		if stacks > 1:
 			l.text += " x%d" % stacks
@@ -1799,19 +1859,7 @@ func _get_player_effect_value(effect_id: String) -> int:
 
 
 func _build_player_effect_details() -> Dictionary:
-	var out: Dictionary = {}
-	for id in player_effects.keys():
-		var e: Dictionary = player_effects[id]
-		var eff: EffectData = e.get("data") as EffectData
-		if eff == null:
-			continue
-		out[id] = {
-			"title": eff.title if eff.title != "" else id,
-			"description": eff.description,
-			"stacks": int(e.get("stacks", 1)),
-			"duration": int(e.get("dur", 0)),
-		}
-	return out
+	return StatusSystemRes.build_effect_details(player_effects)
 
 
 func _build_effect_signature(details: Dictionary) -> String:

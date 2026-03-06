@@ -48,6 +48,7 @@ var popup_close_btn: Button = null
 
 var merchant_card_offers: Array[Dictionary] = []
 var merchant_relic_offers: Array[Dictionary] = []
+var merchant_show_purge: bool = false
 
 var relic_panel: PanelContainer = null
 var relic_icons_row: HBoxContainer = null
@@ -60,7 +61,6 @@ var time_toggle_btn: Button = null
 
 
 func _ready() -> void:
-	RunManager.bootstrap_starting_relics_from_fight_scene()
 	RunManager.apply_starting_relics()
 
 	if player and ("hp" in player):
@@ -619,7 +619,7 @@ func _roll_merchant_offers() -> void:
 		var card_copy: CardData = picked.duplicate(true) as CardData
 		if card_copy == null:
 			card_copy = picked
-		merchant_card_offers.append({"card": card_copy, "price": _get_card_price(card_copy), "bought": false})
+		merchant_card_offers.append({"card": card_copy, "price": _get_card_price(card_copy), "bought": false, "pinned": false})
 		card_pool.erase(picked)
 
 	var relic_pool: Array[RelicData] = []
@@ -637,7 +637,7 @@ func _roll_merchant_offers() -> void:
 		var relic_copy: RelicData = picked_relic.duplicate(true) as RelicData
 		if relic_copy == null:
 			relic_copy = picked_relic
-		merchant_relic_offers.append({"relic": relic_copy, "price": _get_relic_price(relic_copy), "bought": false})
+		merchant_relic_offers.append({"relic": relic_copy, "price": _get_relic_price(relic_copy), "bought": false, "pinned": false})
 		relic_pool.erase(picked_relic)
 
 
@@ -667,7 +667,6 @@ func _get_relic_price(relic: RelicData) -> int:
 
 func _open_merchant_popup() -> void:
 	if RunManager.deck.is_empty():
-		RunManager.bootstrap_starting_deck_from_fight_scene()
 		RunManager.apply_starting_deck()
 	popup_mode = "merchant"
 	_show_popup_shell("Merchant")
@@ -677,9 +676,24 @@ func _open_merchant_popup() -> void:
 		rest_config.merchant_purge_price_base,
 		rest_config.merchant_purge_price_increment
 	)
+	var reroll_price: int = RunManager.get_merchant_reroll_price(
+		rest_config.merchant_reroll_price_base,
+		rest_config.merchant_reroll_price_increment
+	)
 	var gold_info: Label = Label.new()
-	gold_info.text = "Gold: %d   |   Merchant discount: %.0f%%   |   Purge: %d" % [int(RunManager.gold), discount_pct, purge_price]
+	gold_info.text = "Gold: %d   |   Discount: %.0f%%   |   Purge: %d   |   Reroll: %d" % [int(RunManager.gold), discount_pct, purge_price, reroll_price]
 	popup_body.add_child(gold_info)
+
+	var reroll_btn: Button = Button.new()
+	reroll_btn.text = "Reroll shop (%d)" % reroll_price
+	reroll_btn.disabled = RunManager.gold < reroll_price
+	reroll_btn.pressed.connect(_on_reroll_merchant)
+	popup_body.add_child(reroll_btn)
+
+	var purge_toggle_btn: Button = Button.new()
+	purge_toggle_btn.text = "Hide purge section" if merchant_show_purge else "Show purge section"
+	purge_toggle_btn.pressed.connect(_on_toggle_merchant_purge_section)
+	popup_body.add_child(purge_toggle_btn)
 
 	var card_header: Label = Label.new()
 	card_header.text = "Cards"
@@ -715,6 +729,13 @@ func _open_merchant_popup() -> void:
 		buy_btn.disabled = bought or RunManager.gold < price
 		buy_btn.pressed.connect(_on_buy_merchant_card.bind(i))
 		col.add_child(buy_btn)
+
+		var pin_btn: Button = Button.new()
+		var pinned: bool = bool(offer.get("pinned", false))
+		pin_btn.text = "Unpin" if pinned else "Pin"
+		pin_btn.disabled = bought
+		pin_btn.pressed.connect(_on_toggle_pin_card_offer.bind(i))
+		col.add_child(pin_btn)
 
 	var relic_header: Label = Label.new()
 	relic_header.text = "Relics"
@@ -753,19 +774,29 @@ func _open_merchant_popup() -> void:
 		buy_btn.pressed.connect(_on_buy_merchant_relic.bind(i))
 		row.add_child(buy_btn)
 
+		var pin_btn: Button = Button.new()
+		var pinned: bool = bool(offer.get("pinned", false))
+		pin_btn.text = "Unpin" if pinned else "Pin"
+		pin_btn.disabled = bought
+		pin_btn.pressed.connect(_on_toggle_pin_relic_offer.bind(i))
+		row.add_child(pin_btn)
+
 	var purge_header: Label = Label.new()
 	purge_header.text = "Remove Card From Deck"
 	purge_header.add_theme_font_size_override("font_size", 18)
 	popup_body.add_child(purge_header)
+	purge_header.visible = merchant_show_purge
 
 	var purge_hint: Label = Label.new()
 	purge_hint.text = "Cost: %d (base 50, +25 each time). Minimum deck size is 1." % purge_price
 	popup_body.add_child(purge_hint)
+	purge_hint.visible = merchant_show_purge
 
 	var purge_grid: HFlowContainer = HFlowContainer.new()
 	purge_grid.add_theme_constant_override("h_separation", 12)
 	purge_grid.add_theme_constant_override("v_separation", 10)
 	popup_body.add_child(purge_grid)
+	purge_grid.visible = merchant_show_purge
 
 	for i in range(RunManager.deck.size()):
 		var deck_card: CardData = RunManager.deck[i]
@@ -789,6 +820,125 @@ func _open_merchant_popup() -> void:
 		purge_btn.disabled = RunManager.deck.size() <= 1 or RunManager.gold < purge_price
 		purge_btn.pressed.connect(_on_purge_merchant_card.bind(i))
 		purge_col.add_child(purge_btn)
+
+
+func _on_reroll_merchant() -> void:
+	var reroll_price: int = RunManager.get_merchant_reroll_price(
+		rest_config.merchant_reroll_price_base,
+		rest_config.merchant_reroll_price_increment
+	)
+	if RunManager.gold < reroll_price:
+		return
+	RunManager.gold -= reroll_price
+	RunManager.consume_merchant_reroll()
+	_reroll_merchant_offers_keep_pinned()
+	_update_hud()
+	_open_merchant_popup()
+
+
+func _on_toggle_pin_card_offer(index: int) -> void:
+	if index < 0 or index >= merchant_card_offers.size():
+		return
+	var offer: Dictionary = merchant_card_offers[index]
+	if bool(offer.get("bought", false)):
+		return
+	offer["pinned"] = not bool(offer.get("pinned", false))
+	merchant_card_offers[index] = offer
+	_open_merchant_popup()
+
+
+func _on_toggle_pin_relic_offer(index: int) -> void:
+	if index < 0 or index >= merchant_relic_offers.size():
+		return
+	var offer: Dictionary = merchant_relic_offers[index]
+	if bool(offer.get("bought", false)):
+		return
+	offer["pinned"] = not bool(offer.get("pinned", false))
+	merchant_relic_offers[index] = offer
+	_open_merchant_popup()
+
+
+func _on_toggle_merchant_purge_section() -> void:
+	merchant_show_purge = not merchant_show_purge
+	_open_merchant_popup()
+
+
+func _reroll_merchant_offers_keep_pinned() -> void:
+	var reserved_card_ids: Dictionary = {}
+	for card_offer in merchant_card_offers:
+		var keep_card: bool = bool(card_offer.get("bought", false)) or bool(card_offer.get("pinned", false))
+		if not keep_card:
+			continue
+		var keep_card_data: CardData = card_offer.get("card") as CardData
+		if keep_card_data != null and keep_card_data.id != "":
+			reserved_card_ids[keep_card_data.id] = true
+
+	var card_pool: Array[CardData] = []
+	for pool_card in RunManager.get_available_card_pool():
+		if pool_card == null or not pool_card.can_appear_in_merchant:
+			continue
+		if pool_card.id != "" and reserved_card_ids.has(pool_card.id):
+			continue
+		card_pool.append(pool_card)
+
+	for i in range(merchant_card_offers.size()):
+		var offer: Dictionary = merchant_card_offers[i]
+		if bool(offer.get("bought", false)) or bool(offer.get("pinned", false)):
+			continue
+		if card_pool.is_empty():
+			continue
+		var picked_card: CardData = RunManager.pick_from_array_run(card_pool) as CardData
+		if picked_card == null:
+			continue
+		card_pool.erase(picked_card)
+		var card_copy: CardData = picked_card.duplicate(true) as CardData
+		if card_copy == null:
+			card_copy = picked_card
+		merchant_card_offers[i] = {
+			"card": card_copy,
+			"price": _get_card_price(card_copy),
+			"bought": false,
+			"pinned": false,
+		}
+
+	var reserved_relic_ids: Dictionary = {}
+	for relic_offer in merchant_relic_offers:
+		var keep_relic: bool = bool(relic_offer.get("bought", false)) or bool(relic_offer.get("pinned", false))
+		if not keep_relic:
+			continue
+		var keep_relic_data: RelicData = relic_offer.get("relic") as RelicData
+		if keep_relic_data != null and keep_relic_data.id != "":
+			reserved_relic_ids[keep_relic_data.id] = true
+
+	var relic_pool: Array[RelicData] = []
+	for pool_relic in RunManager.get_available_relic_pool():
+		if pool_relic == null:
+			continue
+		if pool_relic.id != "" and RunManager.has_relic_id(pool_relic.id):
+			continue
+		if pool_relic.id != "" and reserved_relic_ids.has(pool_relic.id):
+			continue
+		relic_pool.append(pool_relic)
+
+	for i in range(merchant_relic_offers.size()):
+		var offer: Dictionary = merchant_relic_offers[i]
+		if bool(offer.get("bought", false)) or bool(offer.get("pinned", false)):
+			continue
+		if relic_pool.is_empty():
+			continue
+		var picked_relic: RelicData = RunManager.pick_from_array_run(relic_pool) as RelicData
+		if picked_relic == null:
+			continue
+		relic_pool.erase(picked_relic)
+		var relic_copy: RelicData = picked_relic.duplicate(true) as RelicData
+		if relic_copy == null:
+			relic_copy = picked_relic
+		merchant_relic_offers[i] = {
+			"relic": relic_copy,
+			"price": _get_relic_price(relic_copy),
+			"bought": false,
+			"pinned": false,
+		}
 
 
 func _on_buy_merchant_card(index: int) -> void:

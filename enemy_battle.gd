@@ -1,5 +1,6 @@
 extends Node2D
 const EnemyAppliedEffectRes = preload("res://Enemies/EnemyAppliedEffect.gd")
+const StatusSystemRes = preload("res://Combat/StatusSystem.gd")
 
 signal hit_player(target: Node)
 signal apply_player_effects(payloads: Array)
@@ -115,8 +116,23 @@ func _update_intent_visual() -> void:
 			intent_label.text = "!"
 			intent_label.modulate = Color.GREEN
 		EnemyData.Intent.DEBUFF:
-			intent_label.text = "Debuff"
+			intent_label.text = get_intent_payload_text()
 			intent_label.modulate = Color(0.82, 0.48, 1.0)
+
+
+func get_intent_payload_text() -> String:
+	if current_intent != EnemyData.Intent.DEBUFF or data == null:
+		return ""
+	var parts: PackedStringArray = PackedStringArray()
+	for cfg in data.debuff_effects_on_player:
+		if cfg == null or cfg.effect == null:
+			continue
+		var effect: EffectData = cfg.effect as EffectData
+		var t: String = effect.title if effect.title != "" else effect.id
+		parts.append("%s x%d %d%%" % [t, int(cfg.stacks), int(cfg.chance_percent)])
+	if parts.is_empty():
+		return "Debuff"
+	return "Debuff: " + ", ".join(parts)
 
 
 func tick_end_turn_effects() -> void:
@@ -348,22 +364,7 @@ func apply_effect(effect_or_id: Variant, durability: int) -> void:
 	if id == "":
 		return
 
-	var e: Dictionary = effects.get(id, {})
-	if e.is_empty():
-		e = {"data": eff, "dur": int(durability), "stacks": 1}
-	else:
-		e["data"] = eff
-		match eff.stack_model:
-			EffectData.StackModel.INTENSITY:
-				e["stacks"] = int(e.get("stacks", 0)) + 1
-				e["dur"] = max(int(e.get("dur", 0)), int(durability))
-			EffectData.StackModel.UNIQUE:
-				e["stacks"] = 1
-				e["dur"] = max(int(e.get("dur", 0)), int(durability))
-			_:
-				e["stacks"] = 1
-				e["dur"] = int(e.get("dur", 0)) + int(durability)
-	effects[id] = e
+	StatusSystemRes.apply_effect(effects, eff, int(durability), 1)
 
 
 func get_effects() -> Dictionary:
@@ -375,19 +376,7 @@ func get_effects() -> Dictionary:
 
 
 func get_effect_details() -> Dictionary:
-	var out: Dictionary = {}
-	for id in effects.keys():
-		var e: Dictionary = effects[id]
-		var eff: EffectData = e.get("data") as EffectData
-		if eff == null:
-			continue
-		out[id] = {
-			"title": eff.title,
-			"description": eff.description,
-			"stacks": int(e.get("stacks", 0)),
-			"duration": int(e.get("dur", 0)),
-		}
-	return out
+	return StatusSystemRes.build_effect_details(effects)
 
 
 func get_effective_attack_damage() -> int:

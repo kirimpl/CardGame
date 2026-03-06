@@ -31,7 +31,17 @@ const MUTATOR_FIRST_ATTACK_BONUS: String = "FIRST_ATTACK_BONUS"
 @export_range(0.0, 1.0, 0.01) var multi_enemy_chance: float = 0.30
 @export_range(2, 4, 1) var multi_enemy_max_count: int = 2
 @export var starting_relics: Array[RelicData] = []
-@export var starting_deck_templates: Array[CardData] = []
+@export var starting_deck_templates: Array[CardData] = [
+	preload("res://Cards/Data/Attack/Strike.tres"),
+	preload("res://Cards/Data/Attack/Strike.tres"),
+	preload("res://Cards/Data/Attack/Strike.tres"),
+	preload("res://Cards/Data/Attack/Strike.tres"),
+	preload("res://Cards/Data/Defense/Shield.tres"),
+	preload("res://Cards/Data/Defense/Shield.tres"),
+	preload("res://Cards/Data/Defense/Shield.tres"),
+	preload("res://Cards/Data/Attack/Slash.tres"),
+	preload("res://Cards/Data/Defense/GuardUp.tres"),
+]
 @export var guaranteed_rest_floors: PackedInt32Array = PackedInt32Array([5, 9])
 @export_file("*.tscn") var level_scene_path: String = "res://level.tscn"
 @export_file("*.tscn") var rest_room_scene_path: String = "res://level.tscn"
@@ -56,6 +66,7 @@ const MUTATOR_FIRST_ATTACK_BONUS: String = "FIRST_ATTACK_BONUS"
 @export_range(2, 6, 1) var map_lane_count: int = 3
 @export_range(1, 3, 1) var map_branch_width: int = 1
 @export var fixed_seed: int = 0
+@export var balance_config: Resource = preload("res://Config/Data/DefaultBalanceConfig.tres")
 
 var current_floor: int = 1
 var current_act: int = 1
@@ -73,6 +84,7 @@ var relics: Array[RelicData] = []
 var consumed_one_shot_relic_indices: Dictionary = {}
 var used_smith_free_upgrades: int = 0
 var merchant_purge_count: int = 0
+var merchant_reroll_count: int = 0
 var is_night: bool = false
 var time_shards: int = 0
 var forced_room_type: String = ""
@@ -100,6 +112,7 @@ var all_relics_cache: Array[RelicData] = []
 var loaded_enemy_act: int = -1
 
 func _ready() -> void:
+	_apply_balance_config()
 	_randomize_once()
 	start_new_run()
 	_load_enemy_pools()
@@ -161,6 +174,24 @@ func pick_from_array_run(items: Array) -> Variant:
 	if items.is_empty():
 		return null
 	return items[_pick_index(items.size())]
+
+
+func _apply_balance_config() -> void:
+	if balance_config == null:
+		return
+	night_dot_multiplier = balance_config.night_dot_multiplier
+	night_debuff_multiplier = balance_config.night_debuff_multiplier
+	day_block_multiplier = balance_config.day_block_multiplier
+	day_heal_multiplier = balance_config.day_heal_multiplier
+	starting_time_shards = balance_config.starting_time_shards
+	max_time_shards = balance_config.max_time_shards
+	shards_per_floor = balance_config.shards_per_floor
+	time_toggle_cost = balance_config.time_toggle_cost
+	mutator_none_weight = balance_config.mutator_none_weight
+	mutator_bleed_x2_weight = balance_config.mutator_bleed_x2_weight
+	mutator_heal_half_weight = balance_config.mutator_heal_half_weight
+	mutator_first_skill_free_weight = balance_config.mutator_first_skill_free_weight
+	mutator_first_attack_bonus_weight = balance_config.mutator_first_attack_bonus_weight
 
 
 func _load_enemy_pools() -> void:
@@ -328,6 +359,7 @@ func start_new_run() -> void:
 	consumed_one_shot_relic_indices.clear()
 	used_smith_free_upgrades = 0
 	merchant_purge_count = 0
+	merchant_reroll_count = 0
 	forced_room_type = ""
 	floor_mutators.clear()
 	current_floor_mutator = MUTATOR_NONE
@@ -353,8 +385,6 @@ func start_new_run() -> void:
 		"damage_dealt": 0,
 		"damage_taken": 0,
 	}
-	bootstrap_starting_relics_from_fight_scene()
-	bootstrap_starting_deck_from_fight_scene()
 	apply_starting_deck()
 	apply_starting_relics()
 	log_combat("Run started. Floor %d" % current_floor)
@@ -685,19 +715,19 @@ func _ensure_map_generated() -> void:
 
 
 func finish_run(victory: bool, reason: String) -> void:
-	var floor_bonus: int = max(0, current_floor - 1) * 8
-	var fight_bonus: int = int(run_stats.get("fights_won", 0.0)) * 12
-	var effect_bonus: int = int(round(float(run_stats.get("effects_applied", 0.0)) * 0.8))
-	var dot_bonus: int = int(round(float(run_stats.get("effect_damage", 0.0)) * 0.15))
-	var heal_bonus: int = int(round(float(run_stats.get("healing_done", 0.0)) * 0.2))
+	var floor_bonus: int = max(0, current_floor - 1) * int(balance_config.xp_floor_mult if balance_config != null else 8)
+	var fight_bonus: int = int(run_stats.get("fights_won", 0.0)) * int(balance_config.xp_fight_win if balance_config != null else 12)
+	var effect_bonus: int = int(round(float(run_stats.get("effects_applied", 0.0)) * float(balance_config.xp_effect_applied_mult if balance_config != null else 0.8)))
+	var dot_bonus: int = int(round(float(run_stats.get("effect_damage", 0.0)) * float(balance_config.xp_effect_damage_mult if balance_config != null else 0.15)))
+	var heal_bonus: int = int(round(float(run_stats.get("healing_done", 0.0)) * float(balance_config.xp_heal_mult if balance_config != null else 0.2)))
 	var tempo_bonus: int = 0
 	if victory:
 		tempo_bonus = max(0, 20 - int(round(float(run_stats.get("turns_spent", 0.0)) * 0.5)))
-	var victory_bonus: int = 50 if victory else 0
+	var victory_bonus: int = int(balance_config.xp_victory_bonus if balance_config != null else 50) if victory else 0
 	var xp_gain: int = 15 + floor_bonus + fight_bonus + effect_bonus + dot_bonus + heal_bonus + tempo_bonus + victory_bonus
 	if not victory:
-		xp_gain = int(round(float(xp_gain) * 0.45))
-	xp_gain = max(6, xp_gain)
+		xp_gain = int(round(float(xp_gain) * float(balance_config.xp_defeat_multiplier if balance_config != null else 0.45)))
+	xp_gain = max(int(balance_config.xp_minimum if balance_config != null else 6), xp_gain)
 	if victory and current_act >= total_acts and current_floor >= boss_floor:
 		xp_gain = int(round(float(xp_gain) * final_victory_xp_multiplier))
 
@@ -946,6 +976,15 @@ func consume_merchant_purge() -> void:
 	merchant_purge_count += 1
 
 
+func get_merchant_reroll_price(base_price: int, increment: int) -> int:
+	var raw_price: int = max(0, base_price + merchant_reroll_count * max(0, increment))
+	return apply_merchant_discount(raw_price)
+
+
+func consume_merchant_reroll() -> void:
+	merchant_reroll_count += 1
+
+
 func add_relic(relic: RelicData, heal_to_full_on_add: bool = false) -> void:
 	if relic == null:
 		return
@@ -1172,6 +1211,7 @@ func export_state() -> Dictionary:
 	data["reward_claimed"] = reward_claimed
 	data["used_smith_free_upgrades"] = used_smith_free_upgrades
 	data["merchant_purge_count"] = merchant_purge_count
+	data["merchant_reroll_count"] = merchant_reroll_count
 	data["is_night"] = is_night
 	data["time_shards"] = time_shards
 	data["forced_room_type"] = forced_room_type
@@ -1214,6 +1254,7 @@ func import_state(data: Dictionary) -> void:
 	reward_claimed = bool(data.get("reward_claimed", false))
 	used_smith_free_upgrades = int(data.get("used_smith_free_upgrades", 0))
 	merchant_purge_count = int(data.get("merchant_purge_count", 0))
+	merchant_reroll_count = int(data.get("merchant_reroll_count", 0))
 	is_night = bool(data.get("is_night", false))
 	time_shards = clampi(int(data.get("time_shards", starting_time_shards)), 0, max_time_shards)
 	forced_room_type = str(data.get("forced_room_type", ""))

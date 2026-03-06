@@ -19,6 +19,8 @@ class_name RestConfig
 @export_group("Merchant Purge")
 @export var merchant_purge_price_base: int = 50
 @export var merchant_purge_price_increment: int = 25
+@export var merchant_reroll_price_base: int = 20
+@export var merchant_reroll_price_increment: int = 10
 
 @export_group("Smith")
 @export var smith_upgrade_price: int = 90
