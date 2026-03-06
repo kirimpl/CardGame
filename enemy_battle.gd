@@ -41,12 +41,14 @@ const DEFAULT_EFFECT_PATHS: Dictionary = {
 @export var hitstop_scale: float = 0.1
 @export var hitstop_duration: float = 0.15
 @export var return_speed: float = 0.2
+@export var death_finish_delay: float = 1.0
 
 @onready var anim: AnimatedSprite2D = $AnimatedSprite2D
 @onready var intent_ui: Node2D = $IntentUI
 @onready var intent_label: Label = $IntentUI/Label
 
 var busy: bool = false
+var death_started: bool = false
 
 
 func setup(enemy_res: EnemyData, floor_level: int, is_elite: bool = false) -> void:
@@ -57,6 +59,9 @@ func setup(enemy_res: EnemyData, floor_level: int, is_elite: bool = false) -> vo
 	data = enemy_res
 	if anim != null:
 		anim.sprite_frames = data.sprite_frames
+		_force_no_loop("Attack")
+		_force_no_loop("Take_Damage")
+		_force_no_loop("Death")
 		anim.play("Idle")
 		anim.frame = 0
 		scale = Vector2(data.scale, data.scale)
@@ -115,7 +120,7 @@ func _update_intent_visual() -> void:
 
 
 func tick_end_turn_effects() -> void:
-	if hp <= 0:
+	if hp <= 0 or death_started:
 		return
 	await _tick_effects_for_phase(EffectData.TickWhen.END_TURN)
 
@@ -160,7 +165,7 @@ func _tick_effects_for_phase(phase: EffectData.TickWhen) -> void:
 
 func execute_turn(player_target: Node2D) -> void:
 	busy = true
-	if hp <= 0:
+	if hp <= 0 or death_started:
 		busy = false
 		return
 
@@ -408,6 +413,8 @@ func get_total_miss_chance_percent() -> int:
 
 
 func take_damage(amount: int) -> void:
+	if death_started:
+		return
 	var dealt: int = max(0, amount)
 	var incoming_mult: float = 1.0
 	for id in effects.keys():
@@ -433,21 +440,29 @@ func take_damage(amount: int) -> void:
 
 
 func play_hit_anim() -> void:
+	if death_started or hp <= 0:
+		return
 	busy = true
 	_play_anim("Take_Damage")
 	if anim.sprite_frames and anim.sprite_frames.has_animation("Take_Damage"):
 		await anim.animation_finished
 	busy = false
+	if death_started or hp <= 0:
+		return
 	_play_anim("Idle")
 
 
 func play_death() -> void:
+	if death_started:
+		return
+	death_started = true
 	busy = true
 	_play_anim("Death")
 	if anim.sprite_frames and anim.sprite_frames.has_animation("Death"):
 		await anim.animation_finished
 	else:
 		await get_tree().create_timer(0.6).timeout
+	await get_tree().create_timer(max(0.0, death_finish_delay)).timeout
 	busy = false
 	emit_signal("died")
 	queue_free()
@@ -457,6 +472,13 @@ func _play_anim(name: String) -> void:
 	if anim and anim.sprite_frames and anim.sprite_frames.has_animation(name):
 		if anim.animation != name or not anim.is_playing():
 			anim.play(name)
+
+
+func _force_no_loop(name: String) -> void:
+	if anim == null or anim.sprite_frames == null:
+		return
+	if anim.sprite_frames.has_animation(name):
+		anim.sprite_frames.set_animation_loop(name, false)
 
 
 func _wait_hit_frame() -> void:

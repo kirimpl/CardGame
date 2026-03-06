@@ -251,19 +251,19 @@ animations = [{
 "duration": 1.0,
 "texture": SubResource("AtlasTexture_lfmf2")
 }, {
-"duration": 1.0,
+"duration": 1.2,
 "texture": SubResource("AtlasTexture_pisgm")
 }, {
-"duration": 1.0,
+"duration": 1.2,
 "texture": SubResource("AtlasTexture_b1ygp")
 }, {
-"duration": 1.0,
+"duration": 1.2,
 "texture": SubResource("AtlasTexture_o28un")
 }, {
-"duration": 1.0,
+"duration": 1.2,
 "texture": SubResource("AtlasTexture_n471f")
 }, {
-"duration": 1.0,
+"duration": 1.2,
 "texture": SubResource("AtlasTexture_7emwf")
 }],
 "loop": false,
@@ -399,8 +399,10 @@ shape = SubResource("CapsuleShape2D_hvfyp")
 position = Vector2(1, 2)
 scale = Vector2(1.4956797, 1.4147727)
 sprite_frames = SubResource("SpriteFrames_l8h54")
-animation = &"Attack"
+animation = &"Death"
 autoplay = "Idle"
+frame = 5
+frame_progress = 1.0
 
 [node name="Hitboxes" type="Node2D" parent="Player/Player" unique_id=1117229049]
 

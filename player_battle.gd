@@ -13,9 +13,11 @@ signal hit_enemy(target: Node)
 @export var hitstop_scale: float = 0.20
 @export var hitstop_real_time: float = 0.12
 @export var after_hit_delay_real: float = 0.10
+@export var death_finish_delay: float = 1.0
 
 var anim: AnimatedSprite2D
 var hitboxes: Node2D
+var is_dead: bool = false
 
 # === ССЫЛКА НА ТВОЙ РЕАЛЬНЫЙ ЩИТ ===
 # Используем get_node("%Name"), это работает для узлов с % в дереве
@@ -25,6 +27,7 @@ var busy := false
 var facing_right := true
 
 func _ready() -> void:
+	is_dead = false
 	anim = get_node_or_null("Player/Player/AnimatedSprite2D") as AnimatedSprite2D
 	hitboxes = get_node_or_null("Player/Player/Hitboxes") as Node2D
 	
@@ -74,26 +77,40 @@ func face_towards(world_pos: Vector2) -> void:
 
 func play_idle() -> void:
 	if anim == null: return
+	if is_dead: return
 	if not busy: _play("Idle")
 
 func play_run() -> void:
 	if anim == null: return
+	if is_dead: return
 	if not busy: _play("Run")
 
 func play_take_damage() -> void:
 	if anim == null: return
+	if is_dead: return
 	busy = true
 	_play("Take_Damage")
-	var dur: float = max(0.05, float(take_damage_frames) / max(1.0, take_damage_fps))
-	await get_tree().create_timer(dur, false, false, true).timeout
+	if anim.sprite_frames and anim.sprite_frames.has_animation("Take_Damage"):
+		await anim.animation_finished
+	else:
+		var dur: float = max(0.05, float(take_damage_frames) / max(1.0, take_damage_fps))
+		await get_tree().create_timer(dur, false, false, true).timeout
+	if is_dead:
+		return
 	busy = false
 	_play("Idle")
 
 func play_death() -> void:
 	if anim == null: return
+	if is_dead: return
+	is_dead = true
 	busy = true
 	_play("Death")
-	await get_tree().create_timer(0.6, false, false, true).timeout
+	if anim.sprite_frames and anim.sprite_frames.has_animation("Death"):
+		await anim.animation_finished
+	else:
+		await get_tree().create_timer(0.6, false, false, true).timeout
+	await get_tree().create_timer(max(0.0, death_finish_delay), false, false, true).timeout
 
 func attack_sequence(target: Node2D) -> void:
 	if busy or anim == null: return

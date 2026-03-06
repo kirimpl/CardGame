@@ -666,6 +666,9 @@ func _get_relic_price(relic: RelicData) -> int:
 
 
 func _open_merchant_popup() -> void:
+	if RunManager.deck.is_empty():
+		RunManager.bootstrap_starting_deck_from_fight_scene()
+		RunManager.apply_starting_deck()
 	popup_mode = "merchant"
 	_show_popup_shell("Merchant")
 

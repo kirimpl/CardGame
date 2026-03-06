@@ -31,6 +31,7 @@ const MUTATOR_FIRST_ATTACK_BONUS: String = "FIRST_ATTACK_BONUS"
 @export_range(0.0, 1.0, 0.01) var multi_enemy_chance: float = 0.30
 @export_range(2, 4, 1) var multi_enemy_max_count: int = 2
 @export var starting_relics: Array[RelicData] = []
+@export var starting_deck_templates: Array[CardData] = []
 @export var guaranteed_rest_floors: PackedInt32Array = PackedInt32Array([5, 9])
 @export_file("*.tscn") var level_scene_path: String = "res://level.tscn"
 @export_file("*.tscn") var rest_room_scene_path: String = "res://level.tscn"
@@ -353,6 +354,8 @@ func start_new_run() -> void:
 		"damage_taken": 0,
 	}
 	bootstrap_starting_relics_from_fight_scene()
+	bootstrap_starting_deck_from_fight_scene()
+	apply_starting_deck()
 	apply_starting_relics()
 	log_combat("Run started. Floor %d" % current_floor)
 	record_replay_event("run_start", {"seed": run_seed, "floor": current_floor, "act": current_act})
@@ -682,14 +685,19 @@ func _ensure_map_generated() -> void:
 
 
 func finish_run(victory: bool, reason: String) -> void:
-	var floor_bonus: int = max(0, current_floor - 1) * 12
-	var fight_bonus: int = int(run_stats.get("fights_won", 0.0)) * 16
-	var effect_bonus: int = int(round(float(run_stats.get("effects_applied", 0.0)) * 1.5))
-	var dot_bonus: int = int(round(float(run_stats.get("effect_damage", 0.0)) * 0.3))
-	var heal_bonus: int = int(round(float(run_stats.get("healing_done", 0.0)) * 0.35))
-	var tempo_bonus: int = max(0, 90 - int(run_stats.get("turns_spent", 0.0)))
-	var victory_bonus: int = 140 if victory else 0
-	var xp_gain: int = max(25, 40 + floor_bonus + fight_bonus + effect_bonus + dot_bonus + heal_bonus + tempo_bonus + victory_bonus)
+	var floor_bonus: int = max(0, current_floor - 1) * 8
+	var fight_bonus: int = int(run_stats.get("fights_won", 0.0)) * 12
+	var effect_bonus: int = int(round(float(run_stats.get("effects_applied", 0.0)) * 0.8))
+	var dot_bonus: int = int(round(float(run_stats.get("effect_damage", 0.0)) * 0.15))
+	var heal_bonus: int = int(round(float(run_stats.get("healing_done", 0.0)) * 0.2))
+	var tempo_bonus: int = 0
+	if victory:
+		tempo_bonus = max(0, 20 - int(round(float(run_stats.get("turns_spent", 0.0)) * 0.5)))
+	var victory_bonus: int = 50 if victory else 0
+	var xp_gain: int = 15 + floor_bonus + fight_bonus + effect_bonus + dot_bonus + heal_bonus + tempo_bonus + victory_bonus
+	if not victory:
+		xp_gain = int(round(float(xp_gain) * 0.45))
+	xp_gain = max(6, xp_gain)
 	if victory and current_act >= total_acts and current_floor >= boss_floor:
 		xp_gain = int(round(float(xp_gain) * final_victory_xp_multiplier))
 
@@ -1041,6 +1049,45 @@ func apply_starting_relics() -> void:
 	for relic in starting_relics:
 		add_relic(relic, false)
 	_recalculate_derived_stats()
+
+
+func apply_starting_deck() -> void:
+	if not deck.is_empty():
+		return
+	for card_template in starting_deck_templates:
+		if card_template == null:
+			continue
+		var card_copy: CardData = card_template.duplicate(true) as CardData
+		if card_copy == null:
+			card_copy = card_template
+		deck.append(card_copy)
+		mark_card_seen(card_copy.id)
+
+
+func bootstrap_starting_deck_from_fight_scene() -> void:
+	if not starting_deck_templates.is_empty():
+		return
+
+	var fight_scene: PackedScene = load("res://fight.tscn") as PackedScene
+	if fight_scene == null:
+		return
+	var fight_root: Node = fight_scene.instantiate()
+	if fight_root == null:
+		return
+
+	var battle_manager_node: Node = fight_root.get_node_or_null("BattleManager")
+	if battle_manager_node == null:
+		fight_root.queue_free()
+		return
+
+	var bm_deck_variant: Variant = battle_manager_node.get("starting_deck")
+	if bm_deck_variant is Array:
+		var bm_deck: Array = bm_deck_variant
+		for card_variant in bm_deck:
+			if card_variant is CardData:
+				starting_deck_templates.append(card_variant as CardData)
+
+	fight_root.queue_free()
 
 
 func bootstrap_starting_relics_from_fight_scene() -> void:

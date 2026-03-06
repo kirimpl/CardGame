@@ -201,6 +201,10 @@ func _spawn_combatants() -> void:
 			var cb_damage: Callable = Callable(self, "_on_enemy_damage_taken").bind(enemy_instance)
 			if not enemy_instance.damage_taken.is_connected(cb_damage):
 				enemy_instance.damage_taken.connect(cb_damage)
+		if enemy_instance.has_signal("died"):
+			var cb_died: Callable = Callable(self, "_on_enemy_died").bind(enemy_instance)
+			if not enemy_instance.died.is_connected(cb_died):
+				enemy_instance.died.connect(cb_died)
 
 	if RunManager.current_enemy_data == null:
 		push_error("BattleManager: no enemy data")
@@ -227,7 +231,19 @@ func _get_primary_enemy() -> Node2D:
 
 
 func _all_enemies_dead() -> bool:
-	return _get_alive_enemies().is_empty()
+	for enemy_instance in enemies:
+		if enemy_instance != null and is_instance_valid(enemy_instance):
+			return false
+	return true
+
+
+func _has_pending_enemy_deaths() -> bool:
+	for enemy_instance in enemies:
+		if enemy_instance == null or not is_instance_valid(enemy_instance):
+			continue
+		if "hp" in enemy_instance and int(enemy_instance.hp) <= 0:
+			return true
+	return false
 
 
 func _update_ui() -> void:
@@ -1169,6 +1185,10 @@ func _play_card(card: CardData, forced_target: Node2D = null) -> void:
 	if _all_enemies_dead():
 		_on_enemy_dead()
 		return
+	if _get_alive_enemies().is_empty() and _has_pending_enemy_deaths():
+		busy = true
+		_set_buttons_enabled(false)
+		return
 
 	busy = false
 	_set_buttons_enabled(true)
@@ -1272,6 +1292,8 @@ func _on_end_turn_pressed() -> void:
 	if _all_enemies_dead():
 		_on_enemy_dead()
 		return
+	if _get_alive_enemies().is_empty() and _has_pending_enemy_deaths():
+		return
 
 	player_turn = false
 	_start_turn()
@@ -1309,16 +1331,18 @@ func _on_enemy_hit_player(_target: Node, source_enemy: Node2D) -> void:
 		_spawn_damage_popup(_get_player_popup_position(), taken, true)
 		RunManager.add_run_stat("damage_taken", float(taken))
 		_log_turn_action("Enemy", "Attack", "Player took %d" % taken)
-		if is_instance_valid(player) and player.has_method("play_take_damage"):
-			player.call("play_take_damage")
 
 	if int(RunManager.current_hp) <= 0:
 		if RunManager.try_trigger_relic_revive():
 			_update_ui()
 			return
+		if is_instance_valid(player) and player.has_method("play_death"):
+			await player.call("play_death")
 		RunManager.add_run_stat("fights_lost", 1.0)
 		RunManager.finish_run(false, "Defeated in combat")
 		return
+	if taken > 0 and is_instance_valid(player) and player.has_method("play_take_damage"):
+		player.call("play_take_damage")
 	_update_ui()
 
 
@@ -1543,7 +1567,6 @@ func _on_enemy_apply_player_effects(payloads: Array) -> void:
 		if RunManager.get_current_floor_mutator() == RunManager.MUTATOR_BLEED_X2 and effect.id == "bleed":
 			stacks *= 2
 		_apply_player_effect(effect, max(1, dur), max(1, stacks))
-		RunManager.add_run_stat("effects_applied", 1.0)
 		_log_turn_action("Enemy", "ApplyEffect", effect.title if effect.title != "" else effect.id)
 
 
@@ -1558,6 +1581,14 @@ func _on_enemy_damage_taken(amount: int, is_effect_damage: bool, source_enemy: N
 		_log_turn_action("Effect", "DamageOverTime", "Enemy took %d" % amount)
 	else:
 		_log_turn_action("Player", "Attack", "Enemy took %d" % amount)
+
+
+func _on_enemy_died(_enemy_instance: Node2D) -> void:
+	enemies = enemies.filter(func(e: Node2D) -> bool:
+		return e != null and is_instance_valid(e)
+	)
+	if _all_enemies_dead():
+		_on_enemy_dead()
 
 
 func _enemy_action() -> void:
@@ -1578,6 +1609,10 @@ func _enemy_action() -> void:
 
 	if _all_enemies_dead():
 		_on_enemy_dead()
+		return
+	if _get_alive_enemies().is_empty() and _has_pending_enemy_deaths():
+		_set_buttons_enabled(false)
+		busy = true
 		return
 
 	player_turn = true
