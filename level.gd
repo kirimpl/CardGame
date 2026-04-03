@@ -1,6 +1,7 @@
 extends Node2D
 
 const RELIC_FALLBACK_ICON: Texture2D = preload("res://icon.svg")
+const PAUSE_MENU_SCENE: PackedScene = preload("res://UI/pause_menu.tscn")
 
 var fight_started: bool = false
 var enemy: Node = null
@@ -31,11 +32,13 @@ var forced_room_type: String = ""
 @onready var chest: Area2D = $Chest
 @onready var portal: Area2D = $Portal
 @onready var player: Node2D = $Player/Player
-@onready var hp_label: Label = get_node_or_null("HUD/HPLabel")
-@onready var gold_label: Label = get_node_or_null("HUD/GoldLabel")
-@onready var floor_label: Label = get_node_or_null("HUD/FloorLabel")
+@onready var hp_label: Label = get_node_or_null("HUD/TopBar/TopBarMargin/TopBarRow/HPLabel")
+@onready var gold_label: Label = get_node_or_null("HUD/TopBar/TopBarMargin/TopBarRow/GoldLabel")
+@onready var floor_label: Label = get_node_or_null("HUD/TopBar/TopBarMargin/TopBarRow/FloorLabel")
+@onready var day_label: Label = get_node_or_null("HUD/TopBar/TopBarMargin/TopBarRow/DayLabel")
+@onready var time_toggle_btn: Button = get_node_or_null("HUD/TopBar/TopBarMargin/TopBarRow/TopButtons/TimeToggleButton")
+@onready var save_exit_btn: Button = get_node_or_null("HUD/TopBar/TopBarMargin/TopBarRow/TopButtons/SaveExitButton")
 
-var day_label: Label = null
 var interact_label: Label = null
 var rest_stations_root: Node2D = null
 var station_prompts: Dictionary = {}
@@ -56,8 +59,7 @@ var relic_tooltip: PanelContainer = null
 var relic_tooltip_title: Label = null
 var relic_tooltip_desc: Label = null
 var relic_signature_cached: String = ""
-var save_exit_btn: Button = null
-var time_toggle_btn: Button = null
+var pause_menu: PauseMenu = null
 
 
 func _ready() -> void:
@@ -66,12 +68,11 @@ func _ready() -> void:
 	if player and ("hp" in player):
 		RunManager.current_hp = int(player.hp)
 
-	_setup_day_label()
 	_setup_interact_label()
 	_setup_popup_ui()
 	_setup_relic_panel()
-	_setup_save_exit_button()
-	_setup_time_toggle_button()
+	_setup_pause_menu()
+	_bind_top_bar_controls()
 	forced_room_type = RunManager.consume_forced_room_type()
 	if forced_room_type != "":
 		RunManager.forced_room_type = forced_room_type
@@ -532,6 +533,13 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if pause_menu != null and pause_menu.is_open():
+		if event.is_action_pressed("ui_cancel"):
+			pause_menu.close_menu()
+		return
+	if event.is_action_pressed("ui_cancel"):
+		_open_pause_menu()
+		return
 	if not is_rest_room:
 		return
 	if popup_overlay != null and popup_overlay.visible:
@@ -1180,21 +1188,20 @@ func _make_popup_style() -> StyleBoxFlat:
 	return style
 
 
-func _setup_day_label() -> void:
-	var hud: CanvasLayer = get_node_or_null("HUD")
-	if hud == null:
-		return
-	day_label = Label.new()
-	day_label.name = "DayLabel"
-	day_label.offset_left = 450.0
-	day_label.offset_top = 0.0
-	day_label.offset_right = 700.0
-	day_label.offset_bottom = 23.0
-	day_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hud.add_child(day_label)
+func _bind_top_bar_controls() -> void:
+	if time_toggle_btn != null and not time_toggle_btn.pressed.is_connected(_on_time_toggle_pressed):
+		time_toggle_btn.pressed.connect(_on_time_toggle_pressed)
+	if save_exit_btn != null and not save_exit_btn.pressed.is_connected(_on_save_exit_pressed):
+		save_exit_btn.pressed.connect(_on_save_exit_pressed)
+	if save_exit_btn != null:
+		save_exit_btn.text = "Menu"
 
 
 func _setup_save_exit_button() -> void:
+	if save_exit_btn != null:
+		if not save_exit_btn.pressed.is_connected(_on_save_exit_pressed):
+			save_exit_btn.pressed.connect(_on_save_exit_pressed)
+		return
 	var hud: CanvasLayer = get_node_or_null("HUD")
 	if hud == null:
 		return
@@ -1211,6 +1218,10 @@ func _setup_save_exit_button() -> void:
 
 
 func _setup_time_toggle_button() -> void:
+	if time_toggle_btn != null:
+		if not time_toggle_btn.pressed.is_connected(_on_time_toggle_pressed):
+			time_toggle_btn.pressed.connect(_on_time_toggle_pressed)
+		return
 	var hud: CanvasLayer = get_node_or_null("HUD")
 	if hud == null:
 		return
@@ -1234,8 +1245,41 @@ func _on_time_toggle_pressed() -> void:
 
 
 func _on_save_exit_pressed() -> void:
+	_open_pause_menu()
+
+
+func _open_pause_menu() -> void:
+	if pause_menu == null:
+		return
+	pause_menu.open_menu("Level Menu")
+
+
+func _setup_pause_menu() -> void:
+	var hud: CanvasLayer = get_node_or_null("HUD")
+	if hud == null or PAUSE_MENU_SCENE == null:
+		return
+	pause_menu = PAUSE_MENU_SCENE.instantiate() as PauseMenu
+	if pause_menu == null:
+		return
+	hud.add_child(pause_menu)
+	pause_menu.resume_requested.connect(_on_pause_resume_requested)
+	pause_menu.save_exit_requested.connect(_on_pause_save_exit_requested)
+	pause_menu.settings_requested.connect(_on_pause_settings_requested)
+
+
+func _on_pause_resume_requested() -> void:
+	if pause_menu != null:
+		pause_menu.close_menu()
+
+
+func _on_pause_save_exit_requested() -> void:
 	SaveSystem.save_run()
 	get_tree().change_scene_to_file("res://menu.tscn")
+
+
+func _on_pause_settings_requested() -> void:
+	SaveSystem.save_run()
+	get_tree().change_scene_to_file("res://settings.tscn")
 
 
 func _setup_interact_label() -> void:
@@ -1281,10 +1325,11 @@ func _setup_relic_panel() -> void:
 	relic_panel.anchor_right = 1.0
 	relic_panel.anchor_bottom = 0.0
 	relic_panel.offset_left = -330.0
-	relic_panel.offset_top = 8.0
+	relic_panel.offset_top = 72.0
 	relic_panel.offset_right = -8.0
-	relic_panel.offset_bottom = 56.0
+	relic_panel.offset_bottom = 120.0
 	relic_panel.mouse_filter = Control.MOUSE_FILTER_PASS
+	relic_panel.add_theme_stylebox_override("panel", _make_popup_style())
 	hud.add_child(relic_panel)
 
 	relic_icons_row = HBoxContainer.new()

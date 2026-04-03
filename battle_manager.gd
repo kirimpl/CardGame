@@ -3,6 +3,7 @@ extends Node2D
 const RELIC_FALLBACK_ICON: Texture2D = preload("res://icon.svg")
 const EffectKeysRes = preload("res://Combat/EffectKeys.gd")
 const StatusSystemRes = preload("res://Combat/StatusSystem.gd")
+const PAUSE_MENU_SCENE: PackedScene = preload("res://UI/pause_menu.tscn")
 
 @export var player_scene: PackedScene
 @export var enemy_scene: PackedScene
@@ -32,19 +33,22 @@ const StatusSystemRes = preload("res://Combat/StatusSystem.gd")
 @onready var ui_player_bar_fill: ColorRect = ui_player_bar.get_node("Fill")
 @onready var ui_player_bar_text: Label = ui_player_bar.get_node("Text")
 
-@onready var ui_enemy_hp: Label = ui_root.get_node("TopBar/Margin/Row/RightGroup/EnemyHP")
+@onready var ui_enemy_info_panel: PanelContainer = ui_root.get_node("EnemyInfoPanel")
+@onready var ui_enemy_hp: Label = ui_root.get_node("EnemyInfoPanel/Margin/VBox/EnemyName")
 @onready var ui_gold: Label = ui_root.get_node("TopBar/Margin/Row/LeftGroup/GoldLabel")
 @onready var ui_speed_btn: Button = ui_root.get_node("TopBar/Margin/Row/LeftGroup/SpeedBtn")
-@onready var ui_enemy_intent: Label = ui_root.get_node("EnemyIntent")
+@onready var ui_enemy_intent: Label = ui_root.get_node("EnemyInfoPanel/Margin/VBox/EnemyIntent")
 @onready var ui_enemy_bar: Control = ui_root.get_node("EnemyBar")
 @onready var ui_enemy_bar_back: ColorRect = ui_enemy_bar.get_node("Back")
 @onready var ui_enemy_bar_fill: ColorRect = ui_enemy_bar.get_node("Fill")
 @onready var ui_enemy_bar_text: Label = ui_enemy_bar.get_node("Text")
-@onready var ui_enemy_status: HBoxContainer = ui_root.get_node("EnemyStatus")
+@onready var ui_enemy_status: HBoxContainer = ui_root.get_node("EnemyInfoPanel/Margin/VBox/EnemyStatus")
 @onready var end_btn: Button = ui_root.get_node("EndTurnBtn")
 @onready var hand_root: Control = $"../UI/HandRoot"
 @onready var hand_controller: Control = $"../UI/HandRoot/Hand"
-@onready var ui_turn_label: Label = ui_root.get_node_or_null("TurnLabel")
+@onready var ui_turn_label: Label = ui_root.get_node_or_null("TopBar/Margin/Row/CenterGroup/TurnTimeRow/TurnLabel")
+@onready var ui_time_label: Label = ui_root.get_node_or_null("TopBar/Margin/Row/CenterGroup/TurnTimeRow/TimeLabel")
+@onready var ui_time_info_btn: Button = ui_root.get_node_or_null("TopBar/Margin/Row/CenterGroup/TurnTimeRow/TimeInfoBtn")
 @onready var ui_deck: Label = ui_root.get_node("PlayerPanel/Margin/VBox/DeckLabel")
 @onready var ui_discard: Label = ui_root.get_node("PlayerPanel/Margin/VBox/DiscardLabel")
 @onready var ui_exhaust: Label = ui_root.get_node_or_null("PlayerPanel/Margin/VBox/ExhaustLabel")
@@ -56,6 +60,7 @@ var player: Node2D
 var enemies: Array[Node2D] = []
 var player_turn: bool = true
 var busy: bool = false
+var combat_finished: bool = false
 
 var draw_pile: Array[CardData] = []
 var discard_pile: Array[CardData] = []
@@ -86,7 +91,6 @@ var relic_tooltip: PanelContainer = null
 var relic_tooltip_title: Label = null
 var relic_tooltip_desc: Label = null
 var relic_signature_cached: String = ""
-var ui_time_label: Label = null
 var ui_player_status_row: HBoxContainer = null
 var status_tooltip: PanelContainer = null
 var status_tooltip_title: Label = null
@@ -99,15 +103,17 @@ var combat_log_toggle_btn: Button = null
 var combat_log_filter: OptionButton = null
 var combat_log_export_btn: Button = null
 var replay_export_btn: Button = null
-var save_exit_btn: Button = null
+@onready var save_exit_btn: Button = ui_root.get_node_or_null("TopBar/Margin/Row/RightControls/SaveExitButton")
+var pause_menu: PauseMenu = null
 var damage_preview_label: Label = null
 var last_player_hp_display: int = -1
 var last_player_block_display: int = -1
-var stance_label: Label = null
-var echo_label: Label = null
-var mutator_label: Label = null
-var overheat_label: Label = null
-var time_toggle_btn: Button = null
+@onready var stance_label: Label = ui_root.get_node_or_null("TopMetaPanel/Margin/MetaRow/StanceLabel")
+@onready var echo_label: Label = ui_root.get_node_or_null("TopMetaPanel/Margin/MetaRow/EchoLabel")
+@onready var mutator_label: Label = ui_root.get_node_or_null("TopMetaPanel/Margin/MetaRow/MutatorLabel")
+@onready var overheat_label: Label = ui_root.get_node_or_null("TopMetaPanel/Margin/MetaRow/OverheatLabel")
+@onready var time_toggle_btn: Button = ui_root.get_node_or_null("TopBar/Margin/Row/RightControls/TimeToggleBtn")
+@onready var top_meta_panel: PanelContainer = ui_root.get_node_or_null("TopMetaPanel")
 var echo_counters: Dictionary = {
 	"ATTACK": 0,
 	"DEFENSE": 0,
@@ -135,6 +141,7 @@ func _ready() -> void:
 	_setup_combat_log_ui()
 	_setup_damage_preview_ui()
 	_setup_save_exit_button()
+	_setup_pause_menu()
 	_bind_pile_label_events()
 
 	if ui_speed_btn != null:
@@ -221,7 +228,7 @@ func _get_alive_enemies() -> Array[Node2D]:
 			continue
 		if not is_instance_valid(enemy_instance):
 			continue
-		if "hp" in enemy_instance and int(enemy_instance.hp) <= 0:
+		if _is_enemy_defeated(enemy_instance):
 			continue
 		alive.append(enemy_instance)
 	return alive
@@ -245,8 +252,18 @@ func _has_pending_enemy_deaths() -> bool:
 	for enemy_instance in enemies:
 		if enemy_instance == null or not is_instance_valid(enemy_instance):
 			continue
-		if "hp" in enemy_instance and int(enemy_instance.hp) <= 0:
+		if _is_enemy_defeated(enemy_instance):
 			return true
+	return false
+
+
+func _is_enemy_defeated(enemy_instance: Node2D) -> bool:
+	if enemy_instance == null or not is_instance_valid(enemy_instance):
+		return true
+	if "death_started" in enemy_instance and bool(enemy_instance.death_started):
+		return true
+	if "hp" in enemy_instance and int(enemy_instance.hp) <= 0:
+		return true
 	return false
 
 
@@ -277,13 +294,16 @@ func _update_ui() -> void:
 
 	var focus_enemy: Node2D = _get_primary_enemy()
 	if focus_enemy != null:
+		_layout_enemy_info_ui()
+		if ui_enemy_info_panel != null:
+			ui_enemy_info_panel.visible = true
 		var e_name: String = "Enemy"
 		if "data" in focus_enemy and focus_enemy.data != null:
 			e_name = str(focus_enemy.data.name)
 		if RunManager.current_enemy_is_elite:
 			e_name = "Elite " + e_name
-		if enemies.size() > 1:
-			e_name += " x%d" % _get_alive_enemies().size()
+		if _get_alive_enemies().size() > 1:
+			e_name += " Group"
 		ui_enemy_hp.text = e_name
 
 		var maxv: int = int(focus_enemy.max_hp) if ("max_hp" in focus_enemy) else 1
@@ -314,11 +334,11 @@ func _update_ui() -> void:
 					var d: int = int(e.get_effective_attack_damage()) if e.has_method("get_effective_attack_damage") else int(e.damage)
 					p = "ATK %d" % d
 				EnemyData.Intent.DEFEND:
-					p = "DEF +5"
+					p = "DEF"
 				EnemyData.Intent.BUFF:
 					p = "BUFF"
 				EnemyData.Intent.DEBUFF:
-					p = e.get_intent_payload_text() if e.has_method("get_intent_payload_text") else "Debuff"
+					p = e.get_intent_summary_text() if e.has_method("get_intent_summary_text") else "DEBUFF"
 			if p != "":
 				intent_parts.append(p)
 		if pending_target_card != null:
@@ -354,6 +374,13 @@ func _update_ui() -> void:
 					_bind_status_tooltip(l, title, desc)
 					ui_enemy_status.add_child(l)
 	else:
+		if ui_enemy_info_panel != null:
+			ui_enemy_info_panel.visible = false
+		if ui_enemy_bar != null:
+			ui_enemy_bar.offset_left = 949.0
+			ui_enemy_bar.offset_top = 584.0
+			ui_enemy_bar.offset_right = 1113.0
+			ui_enemy_bar.offset_bottom = 608.0
 		ui_enemy_hp.text = "No Enemies"
 		ui_enemy_intent.text = ""
 		ui_enemy_bar_fill.size.x = 0.0
@@ -373,28 +400,80 @@ func _update_ui() -> void:
 			ui_buff_stacks.visible = false
 
 	if ui_turn_label != null:
-		ui_turn_label.text = "Turn: %d" % turn_number
+		ui_turn_label.text = "Turn %d" % turn_number
 	if ui_time_label != null:
-		ui_time_label.text = "Time: %s | Flux: %d" % [("Night" if RunManager.is_night else "Day"), int(RunManager.time_shards)]
+		ui_time_label.text = "%s | Flux %d" % [("Night" if RunManager.is_night else "Day"), int(RunManager.time_shards)]
+	if ui_time_info_btn != null:
+		ui_time_info_btn.tooltip_text = _build_time_info_tooltip()
 	if stance_label != null:
-		stance_label.text = "Stance: %s" % _stance_name(player_stance)
+		stance_label.text = "Position: %s" % _stance_name(player_stance)
+		stance_label.tooltip_text = "Combat position. Some cards gain bonuses or change your position."
+		stance_label.visible = player_stance != CardData.Stance.CENTER
 	if echo_label != null:
-		echo_label.text = "Echo A/D/B: %d/%d/%d" % [
+		echo_label.text = "Echo %d/%d/%d" % [
 			int(echo_counters.get("ATTACK", 0)),
 			int(echo_counters.get("DEFENSE", 0)),
 			int(echo_counters.get("BUFF", 0)),
 		]
+		echo_label.tooltip_text = "Echo counters for Attack / Defense / Buff. Every third card of that type triggers an echo bonus."
+		echo_label.visible = int(echo_counters.get("ATTACK", 0)) > 0 or int(echo_counters.get("DEFENSE", 0)) > 0 or int(echo_counters.get("BUFF", 0)) > 0
 	if mutator_label != null:
-		mutator_label.text = RunManager.get_current_floor_mutator_display()
+		mutator_label.text = "Mutator: %s" % RunManager.get_current_floor_mutator_display()
+		mutator_label.visible = RunManager.get_current_floor_mutator_display().strip_edges().to_lower() != "none"
 	if overheat_label != null:
-		overheat_label.text = "Overheat: %d/%d" % [player_overheat, overheat_threshold]
+		overheat_label.text = "Heat %d/%d" % [player_overheat, overheat_threshold]
+		overheat_label.tooltip_text = "Overheat from powerful cards. Reaching the limit applies a penalty until you vent it."
+		overheat_label.visible = player_overheat > 0
+	if top_meta_panel != null:
+		top_meta_panel.visible = (
+			(overheat_label != null and overheat_label.visible)
+			or (stance_label != null and stance_label.visible)
+			or (echo_label != null and echo_label.visible)
+			or (mutator_label != null and mutator_label.visible)
+		)
 
 	_refresh_relic_panel()
 	_refresh_player_effects_ui()
 
 
+func _layout_enemy_info_ui() -> void:
+	var alive: Array[Node2D] = _get_alive_enemies()
+	if alive.is_empty():
+		return
+
+	if ui_enemy_info_panel != null:
+		ui_enemy_info_panel.offset_left = 858.0
+		ui_enemy_info_panel.offset_top = 374.0
+		ui_enemy_info_panel.offset_right = 1114.0
+		ui_enemy_info_panel.offset_bottom = 442.0
+	if ui_enemy_bar != null:
+		ui_enemy_bar.offset_left = 919.0
+		ui_enemy_bar.offset_top = 623.0
+		ui_enemy_bar.offset_right = 1143.0
+		ui_enemy_bar.offset_bottom = 647.0
+
+
+func _build_time_info_tooltip() -> String:
+	var current_mode: String = "Night" if RunManager.is_night else "Day"
+	var lines: PackedStringArray = []
+	lines.append("Current time: %s" % current_mode)
+	lines.append("")
+	lines.append("Day:")
+	lines.append("- Block gained x%.2f" % RunManager.day_block_multiplier)
+	lines.append("- Healing gained x%.2f" % RunManager.day_heal_multiplier)
+	lines.append("")
+	lines.append("Night:")
+	lines.append("- Enemy HP x%.2f" % RunManager.night_enemy_hp_multiplier)
+	lines.append("- Enemy damage x%.2f" % RunManager.night_enemy_damage_multiplier)
+	lines.append("- Damage over time x%.2f" % RunManager.night_dot_multiplier)
+	lines.append("- Debuff power x%.2f" % RunManager.night_debuff_multiplier)
+	lines.append("")
+	lines.append("Current floor mutator: %s" % RunManager.get_current_floor_mutator_display())
+	return "\n".join(lines)
+
+
 func _assert_ui() -> bool:
-	return ui_player_bar != null and ui_enemy_hp != null and end_btn != null and hand_controller != null and hand_root != null and ui_deck != null and ui_discard != null and ui_energy != null
+	return ui_player_bar != null and ui_enemy_info_panel != null and ui_enemy_hp != null and end_btn != null and hand_controller != null and hand_root != null and ui_deck != null and ui_discard != null and ui_energy != null
 
 
 func _append_combat_log(text: String) -> void:
@@ -439,6 +518,21 @@ func _refresh_combat_log_ui() -> void:
 	combat_log_text.scroll_to_line(combat_log_text.get_line_count())
 
 
+func _make_overlay_panel_style() -> StyleBoxFlat:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.07, 0.08, 0.1, 0.94)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(0.22, 0.25, 0.31, 1.0)
+	style.corner_radius_top_left = 10
+	style.corner_radius_top_right = 10
+	style.corner_radius_bottom_right = 10
+	style.corner_radius_bottom_left = 10
+	return style
+
+
 func _setup_pile_ui() -> void:
 	pile_overlay = Control.new()
 	pile_overlay.name = "PileOverlay"
@@ -462,6 +556,7 @@ func _setup_pile_ui() -> void:
 	panel.offset_top = -160
 	panel.offset_right = 210
 	panel.offset_bottom = 160
+	panel.add_theme_stylebox_override("panel", _make_overlay_panel_style())
 	pile_overlay.add_child(panel)
 
 	var vbox: VBoxContainer = VBoxContainer.new()
@@ -495,15 +590,17 @@ func _setup_relic_panel() -> void:
 	relic_panel.anchor_top = 0.0
 	relic_panel.anchor_right = 1.0
 	relic_panel.anchor_bottom = 0.0
-	relic_panel.offset_left = -330.0
-	relic_panel.offset_top = 50.0
+	relic_panel.offset_left = -132.0
+	relic_panel.offset_top = 62.0
 	relic_panel.offset_right = -10.0
-	relic_panel.offset_bottom = 98.0
+	relic_panel.offset_bottom = 110.0
 	relic_panel.mouse_filter = Control.MOUSE_FILTER_PASS
+	relic_panel.add_theme_stylebox_override("panel", _make_overlay_panel_style())
 	ui_root.add_child(relic_panel)
 
 	relic_icons_row = HBoxContainer.new()
 	relic_icons_row.alignment = BoxContainer.ALIGNMENT_END
+	relic_icons_row.add_theme_constant_override("separation", 6)
 	relic_panel.add_child(relic_icons_row)
 
 	relic_tooltip = PanelContainer.new()
@@ -512,6 +609,7 @@ func _setup_relic_panel() -> void:
 	relic_tooltip.custom_minimum_size = Vector2(260, 90)
 	relic_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	relic_tooltip.z_index = 20
+	relic_tooltip.add_theme_stylebox_override("panel", _make_overlay_panel_style())
 	ui_root.add_child(relic_tooltip)
 
 	var tooltip_vbox: VBoxContainer = VBoxContainer.new()
@@ -528,6 +626,8 @@ func _setup_relic_panel() -> void:
 
 
 func _setup_time_label() -> void:
+	if ui_time_label != null:
+		return
 	ui_time_label = Label.new()
 	ui_time_label.name = "TimeLabel"
 	ui_time_label.offset_left = 470.0
@@ -539,6 +639,8 @@ func _setup_time_label() -> void:
 
 
 func _setup_stance_echo_ui() -> void:
+	if stance_label != null and echo_label != null and mutator_label != null and overheat_label != null:
+		return
 	stance_label = Label.new()
 	stance_label.name = "StanceLabel"
 	stance_label.offset_left = 470.0
@@ -580,6 +682,10 @@ func _setup_stance_echo_ui() -> void:
 
 
 func _setup_time_toggle_button() -> void:
+	if time_toggle_btn != null:
+		if not time_toggle_btn.pressed.is_connected(_on_time_toggle_pressed):
+			time_toggle_btn.pressed.connect(_on_time_toggle_pressed)
+		return
 	time_toggle_btn = Button.new()
 	time_toggle_btn.name = "TimeToggleBtn"
 	time_toggle_btn.anchor_left = 0.0
@@ -619,6 +725,7 @@ func _setup_status_tooltip() -> void:
 	status_tooltip.custom_minimum_size = Vector2(250.0, 80.0)
 	status_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	status_tooltip.z_index = 30
+	status_tooltip.add_theme_stylebox_override("panel", _make_overlay_panel_style())
 	ui_root.add_child(status_tooltip)
 
 	var vbox: VBoxContainer = VBoxContainer.new()
@@ -634,20 +741,6 @@ func _setup_status_tooltip() -> void:
 
 
 func _setup_combat_log_ui() -> void:
-	combat_log_toggle_btn = Button.new()
-	combat_log_toggle_btn.name = "CombatLogToggle"
-	combat_log_toggle_btn.anchor_left = 1.0
-	combat_log_toggle_btn.anchor_top = 1.0
-	combat_log_toggle_btn.anchor_right = 1.0
-	combat_log_toggle_btn.anchor_bottom = 1.0
-	combat_log_toggle_btn.offset_left = -140.0
-	combat_log_toggle_btn.offset_top = -42.0
-	combat_log_toggle_btn.offset_right = -12.0
-	combat_log_toggle_btn.offset_bottom = -10.0
-	combat_log_toggle_btn.text = "Show Log"
-	combat_log_toggle_btn.pressed.connect(_on_combat_log_toggle_pressed)
-	ui_root.add_child(combat_log_toggle_btn)
-
 	combat_log_panel = PanelContainer.new()
 	combat_log_panel.name = "CombatLogPanel"
 	combat_log_panel.anchor_left = 1.0
@@ -659,6 +752,7 @@ func _setup_combat_log_ui() -> void:
 	combat_log_panel.offset_right = -12.0
 	combat_log_panel.offset_bottom = -48.0
 	combat_log_panel.visible = false
+	combat_log_panel.add_theme_stylebox_override("panel", _make_overlay_panel_style())
 	ui_root.add_child(combat_log_panel)
 
 	var margin: MarginContainer = MarginContainer.new()
@@ -738,8 +832,8 @@ func _on_combat_log_toggle_pressed() -> void:
 	if combat_log_panel == null:
 		return
 	combat_log_panel.visible = not combat_log_panel.visible
-	if combat_log_toggle_btn != null:
-		combat_log_toggle_btn.text = "Hide Log" if combat_log_panel.visible else "Show Log"
+	if pause_menu != null and pause_menu.is_open():
+		pause_menu.open_menu("Combat Menu", "Hide Combat Log" if combat_log_panel.visible else "Show Combat Log", true)
 	if combat_log_panel.visible:
 		_refresh_combat_log_ui()
 
@@ -765,6 +859,11 @@ func _on_export_replay_pressed() -> void:
 
 
 func _setup_save_exit_button() -> void:
+	if save_exit_btn != null:
+		if not save_exit_btn.pressed.is_connected(_on_menu_button_pressed):
+			save_exit_btn.pressed.connect(_on_menu_button_pressed)
+		save_exit_btn.text = "Menu"
+		return
 	save_exit_btn = Button.new()
 	save_exit_btn.name = "SaveExitButton"
 	save_exit_btn.anchor_left = 1.0
@@ -775,15 +874,57 @@ func _setup_save_exit_button() -> void:
 	save_exit_btn.offset_top = 6.0
 	save_exit_btn.offset_right = -10.0
 	save_exit_btn.offset_bottom = 34.0
-	save_exit_btn.text = "Save & Main Menu"
+	save_exit_btn.text = "Menu"
 	save_exit_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	save_exit_btn.pressed.connect(_on_save_exit_pressed)
+	save_exit_btn.pressed.connect(_on_menu_button_pressed)
 	ui_root.add_child(save_exit_btn)
+
+
+func _on_menu_button_pressed() -> void:
+	_open_pause_menu()
 
 
 func _on_save_exit_pressed() -> void:
 	SaveSystem.save_run()
 	get_tree().change_scene_to_file("res://menu.tscn")
+
+
+func _setup_pause_menu() -> void:
+	if PAUSE_MENU_SCENE == null:
+		return
+	pause_menu = PAUSE_MENU_SCENE.instantiate() as PauseMenu
+	if pause_menu == null:
+		return
+	ui_root.add_child(pause_menu)
+	pause_menu.resume_requested.connect(_on_pause_resume_requested)
+	pause_menu.extra_requested.connect(_on_pause_extra_requested)
+	pause_menu.settings_requested.connect(_on_pause_settings_requested)
+	pause_menu.save_exit_requested.connect(_on_pause_save_exit_requested)
+
+
+func _open_pause_menu() -> void:
+	if pause_menu == null:
+		return
+	var log_label: String = "Hide Combat Log" if combat_log_panel != null and combat_log_panel.visible else "Show Combat Log"
+	pause_menu.open_menu("Combat Menu", log_label, true)
+
+
+func _on_pause_resume_requested() -> void:
+	if pause_menu != null:
+		pause_menu.close_menu()
+
+
+func _on_pause_extra_requested() -> void:
+	_on_combat_log_toggle_pressed()
+
+
+func _on_pause_settings_requested() -> void:
+	SaveSystem.save_run()
+	get_tree().change_scene_to_file("res://settings.tscn")
+
+
+func _on_pause_save_exit_requested() -> void:
+	_on_save_exit_pressed()
 
 
 func _bind_status_tooltip(label: Label, title: String, desc: String) -> void:
@@ -842,6 +983,15 @@ func _refresh_relic_panel() -> void:
 		icon_holder.mouse_entered.connect(_on_relic_icon_mouse_entered.bind(icon_holder, relic))
 		icon_holder.mouse_exited.connect(_on_relic_icon_mouse_exited)
 		relic_icons_row.add_child(icon_holder)
+	var icon_count: int = relic_icons_row.get_child_count()
+	if relic_panel != null:
+		if icon_count <= 0:
+			relic_panel.visible = false
+		else:
+			relic_panel.visible = true
+			var width: float = 18.0 + float(icon_count) * 40.0 + float(max(0, icon_count - 1)) * 6.0
+			relic_panel.offset_left = -width - 10.0
+			relic_panel.offset_right = -10.0
 	if relic_tooltip != null:
 		relic_tooltip.visible = false
 
@@ -949,7 +1099,8 @@ func _shuffle_cards(cards: Array[CardData]) -> void:
 func _start_turn() -> void:
 	if player_turn:
 		await _start_player_turn_setup()
-		_set_buttons_enabled(true)
+		if int(RunManager.current_hp) > 0 and not combat_finished:
+			_set_buttons_enabled(true)
 	else:
 		_set_buttons_enabled(false)
 		await _enemy_action()
@@ -963,7 +1114,7 @@ func _start_player_turn_setup() -> void:
 	_log_turn_action("System", "TurnStart", "Player turn")
 	energy = energy_max
 	player_defense = 0
-	if _tick_player_effects(EffectData.TickWhen.START_TURN):
+	if await _tick_player_effects(EffectData.TickWhen.START_TURN):
 		return
 	_update_energy_ui()
 	_update_ui()
@@ -1008,7 +1159,7 @@ func _refresh_hand_ui() -> void:
 
 
 func _update_deck_ui() -> void:
-	ui_deck.text = "Deck: %d" % draw_pile.size()
+	ui_deck.text = "Draw: %d" % draw_pile.size()
 	ui_discard.text = "Discard: %d" % discard_pile.size()
 	if ui_exhaust != null:
 		ui_exhaust.text = "Exhaust: %d" % exhaust_pile.size()
@@ -1268,6 +1419,9 @@ func _apply_post_play_manipulation(card: CardData) -> void:
 
 
 func _on_enemy_dead() -> void:
+	if combat_finished:
+		return
+	combat_finished = true
 	for enemy_instance in enemies:
 		if is_instance_valid(enemy_instance):
 			enemy_instance.queue_free()
@@ -1334,10 +1488,9 @@ func _on_end_turn_pressed() -> void:
 			if RunManager.try_trigger_relic_revive():
 				_update_ui()
 			else:
-				RunManager.add_run_stat("fights_lost", 1.0)
-				RunManager.finish_run(false, "Overheated")
+				await _handle_player_defeat("Overheated")
 				return
-	if _tick_player_effects(EffectData.TickWhen.END_TURN):
+	if await _tick_player_effects(EffectData.TickWhen.END_TURN):
 		return
 	_update_ui()
 	if _all_enemies_dead():
@@ -1387,10 +1540,7 @@ func _on_enemy_hit_player(_target: Node, source_enemy: Node2D) -> void:
 		if RunManager.try_trigger_relic_revive():
 			_update_ui()
 			return
-		if is_instance_valid(player) and player.has_method("play_death"):
-			await player.call("play_death")
-		RunManager.add_run_stat("fights_lost", 1.0)
-		RunManager.finish_run(false, "Defeated in combat")
+		await _handle_player_defeat("Defeated in combat")
 		return
 	if taken > 0 and is_instance_valid(player) and player.has_method("play_take_damage"):
 		player.call("play_take_damage")
@@ -1398,6 +1548,13 @@ func _on_enemy_hit_player(_target: Node, source_enemy: Node2D) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		if pause_menu != null and pause_menu.is_open():
+			pause_menu.close_menu()
+		elif pending_target_card == null:
+			_open_pause_menu()
+		get_viewport().set_input_as_handled()
+		return
 	if pending_target_card == null:
 		return
 	if not (event is InputEventMouseButton):
@@ -1661,7 +1818,7 @@ func _on_enemy_damage_taken(amount: int, is_effect_damage: bool, source_enemy: N
 
 func _on_enemy_died(_enemy_instance: Node2D) -> void:
 	enemies = enemies.filter(func(e: Node2D) -> bool:
-		return e != null and is_instance_valid(e)
+		return e != _enemy_instance and e != null and is_instance_valid(e)
 	)
 	if _all_enemies_dead():
 		_on_enemy_dead()
@@ -1682,6 +1839,8 @@ func _enemy_action() -> void:
 			await enemy_instance.call("take_turn", player, player_defense)
 		elif enemy_instance.has_method("execute_turn"):
 			await enemy_instance.call("execute_turn", player)
+		if int(RunManager.current_hp) <= 0:
+			return
 
 	if _all_enemies_dead():
 		_on_enemy_dead()
@@ -1802,8 +1961,7 @@ func _tick_player_effects(phase: EffectData.TickWhen) -> bool:
 					if RunManager.try_trigger_relic_revive():
 						_update_ui()
 					else:
-						RunManager.add_run_stat("fights_lost", 1.0)
-						RunManager.finish_run(false, "Defeated by effect damage")
+						await _handle_player_defeat("Defeated by effect damage")
 					return true
 
 		var dur: int = int(e.get("dur", 0))
@@ -1816,6 +1974,18 @@ func _tick_player_effects(phase: EffectData.TickWhen) -> bool:
 	for rid in to_remove:
 		player_effects.erase(rid)
 	return false
+
+
+func _handle_player_defeat(reason: String) -> void:
+	if combat_finished:
+		return
+	combat_finished = true
+	_set_buttons_enabled(false)
+	busy = true
+	if is_instance_valid(player) and player.has_method("play_death"):
+		await player.call("play_death")
+	RunManager.add_run_stat("fights_lost", 1.0)
+	RunManager.finish_run(false, reason)
 
 
 func _refresh_player_effects_ui() -> void:

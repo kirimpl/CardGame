@@ -343,19 +343,53 @@ collision_mask = 1
 
 [node name="HUD" type="CanvasLayer" parent="." unique_id=1534800655]
 
-[node name="HPLabel" type="Label" parent="HUD" unique_id=512885788]
-offset_right = 40.0
-offset_bottom = 23.0
+[node name="TopBar" type="PanelContainer" parent="HUD"]
+offset_right = 1152.0
+offset_bottom = 44.0
 
-[node name="GoldLabel" type="Label" parent="HUD" unique_id=2096366251]
-offset_left = 145.0
-offset_right = 185.0
-offset_bottom = 23.0
+[node name="TopBarMargin" type="MarginContainer" parent="HUD/TopBar"]
+offset_right = 1152.0
+offset_bottom = 44.0
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 8
 
-[node name="FloorLabel" type="Label" parent="HUD" unique_id=1767283050]
-offset_left = 285.0
-offset_right = 345.0
-offset_bottom = 23.0
+[node name="TopBarRow" type="HBoxContainer" parent="HUD/TopBar/TopBarMargin"]
+offset_left = 14.0
+offset_top = 8.0
+offset_right = 1138.0
+offset_bottom = 36.0
+theme_override_constants/separation = 18
+
+[node name="HPLabel" type="Label" parent="HUD/TopBar/TopBarMargin/TopBarRow" unique_id=512885788]
+size_flags_vertical = 4
+text = "HP: 0/0"
+
+[node name="GoldLabel" type="Label" parent="HUD/TopBar/TopBarMargin/TopBarRow" unique_id=2096366251]
+size_flags_vertical = 4
+text = "Gold: 0"
+
+[node name="FloorLabel" type="Label" parent="HUD/TopBar/TopBarMargin/TopBarRow" unique_id=1767283050]
+size_flags_vertical = 4
+text = "Floor: 1"
+
+[node name="DayLabel" type="Label" parent="HUD/TopBar/TopBarMargin/TopBarRow"]
+size_flags_horizontal = 3
+size_flags_vertical = 4
+text = "Time: Day | Flux: 0"
+
+[node name="TopButtons" type="HBoxContainer" parent="HUD/TopBar/TopBarMargin/TopBarRow"]
+alignment = 2
+theme_override_constants/separation = 10
+
+[node name="TimeToggleButton" type="Button" parent="HUD/TopBar/TopBarMargin/TopBarRow/TopButtons"]
+custom_minimum_size = Vector2(170, 0)
+text = "Toggle Time"
+
+[node name="SaveExitButton" type="Button" parent="HUD/TopBar/TopBarMargin/TopBarRow/TopButtons"]
+custom_minimum_size = Vector2(210, 0)
+text = "Menu"
 
 [connection signal="hit_enemy" from="Player/Player" to="." method="_on_player_hit_enemy"]
 [connection signal="body_entered" from="Portal" to="." method="_on_portal_body_entered"]

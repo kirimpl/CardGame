@@ -105,18 +105,21 @@ func _update_intent_visual() -> void:
 		return
 	intent_ui.visible = true
 	intent_label.text = ""
+	intent_label.tooltip_text = ""
 	match current_intent:
 		EnemyData.Intent.ATTACK:
 			intent_label.text = str(get_effective_attack_damage())
 			intent_label.modulate = Color(1, 0.3, 0.3)
 		EnemyData.Intent.DEFEND:
-			intent_label.text = str(defend_amount)
+			intent_label.text = "DEF"
+			intent_label.tooltip_text = "Defend: +%d block" % defend_amount
 			intent_label.modulate = Color(0.3, 0.6, 1)
 		EnemyData.Intent.BUFF:
-			intent_label.text = "!"
+			intent_label.text = "BUFF"
 			intent_label.modulate = Color.GREEN
 		EnemyData.Intent.DEBUFF:
-			intent_label.text = get_intent_payload_text()
+			intent_label.text = "DEBUFF"
+			intent_label.tooltip_text = get_intent_payload_text()
 			intent_label.modulate = Color(0.82, 0.48, 1.0)
 
 
@@ -133,6 +136,19 @@ func get_intent_payload_text() -> String:
 	if parts.is_empty():
 		return "Debuff"
 	return "Debuff: " + ", ".join(parts)
+
+
+func get_intent_summary_text() -> String:
+	match current_intent:
+		EnemyData.Intent.ATTACK:
+			return "ATK %d" % get_effective_attack_damage()
+		EnemyData.Intent.DEFEND:
+			return "DEF"
+		EnemyData.Intent.BUFF:
+			return "BUFF"
+		EnemyData.Intent.DEBUFF:
+			return "DEBUFF"
+	return ""
 
 
 func tick_end_turn_effects() -> void:
@@ -232,6 +248,8 @@ func _consume_stun_if_any() -> bool:
 
 
 func _attack_sequence(target: Node2D) -> void:
+	if death_started or hp <= 0:
+		return
 	if _roll_miss():
 		await get_tree().create_timer(0.2).timeout
 		_play_anim("Idle")
@@ -243,9 +261,13 @@ func _attack_sequence(target: Node2D) -> void:
 	var tween: Tween = create_tween()
 	tween.tween_property(self, "global_position", attack_pos, 0.2).set_trans(Tween.TRANS_CUBIC)
 	await tween.finished
+	if death_started or hp <= 0:
+		return
 
 	_play_anim("Attack")
 	await _wait_hit_frame()
+	if death_started or hp <= 0:
+		return
 
 	if use_hitstop:
 		var old_scale: float = Engine.time_scale
@@ -255,10 +277,14 @@ func _attack_sequence(target: Node2D) -> void:
 
 	emit_signal("hit_player", target)
 	await get_tree().create_timer(0.2).timeout
+	if death_started or hp <= 0:
+		return
 
 	var return_tween: Tween = create_tween()
 	return_tween.tween_property(self, "global_position", start_pos, return_speed)
 	await return_tween.finished
+	if death_started or hp <= 0:
+		return
 	_play_anim("Idle")
 
 
@@ -270,30 +296,42 @@ func _roll_miss() -> bool:
 
 
 func _defend_sequence() -> void:
+	if death_started or hp <= 0:
+		return
 	_play_anim("Idle")
 	var t: Tween = create_tween()
 	t.tween_property(self, "modulate", Color.CYAN, 0.2)
 	t.tween_property(self, "modulate", Color.WHITE, 0.2)
 	await t.finished
+	if death_started or hp <= 0:
+		return
 	current_defense += defend_amount
 	_apply_configured_effects_to_self(data.defend_effects_on_self if data != null else [])
 
 
 func _buff_sequence() -> void:
+	if death_started or hp <= 0:
+		return
 	damage += buff_damage_amount
 	var t: Tween = create_tween()
 	t.tween_property(self, "scale", scale * 1.2, 0.2)
 	t.tween_property(self, "scale", scale, 0.2)
 	await t.finished
+	if death_started or hp <= 0:
+		return
 	_apply_configured_effects_to_self(data.buff_effects_on_self if data != null else [])
 
 
 func _debuff_sequence(_target: Node2D) -> void:
+	if death_started or hp <= 0:
+		return
 	_play_anim("Idle")
 	var t: Tween = create_tween()
 	t.tween_property(self, "modulate", Color(0.75, 0.45, 1.0, 1.0), 0.15)
 	t.tween_property(self, "modulate", Color.WHITE, 0.15)
 	await t.finished
+	if death_started or hp <= 0:
+		return
 	var payloads: Array[Dictionary] = _build_effect_payloads(data.debuff_effects_on_player if data != null else [])
 	if RunManager.is_night and not payloads.is_empty():
 		for i in range(payloads.size()):
@@ -446,6 +484,8 @@ func play_death() -> void:
 		return
 	death_started = true
 	busy = true
+	if intent_ui != null:
+		intent_ui.visible = false
 	_play_anim("Death")
 	if anim.sprite_frames and anim.sprite_frames.has_animation("Death"):
 		await anim.animation_finished
@@ -458,6 +498,10 @@ func play_death() -> void:
 
 
 func _play_anim(name: String) -> void:
+	if death_started and name != "Death":
+		return
+	if hp <= 0 and name != "Death":
+		return
 	if anim and anim.sprite_frames and anim.sprite_frames.has_animation(name):
 		if anim.animation != name or not anim.is_playing():
 			anim.play(name)

@@ -15,11 +15,9 @@
 [ext_resource type="PackedScene" uid="uid://b0qoa7rel7exk" path="res://UI/CardView.tscn" id="12_8o1o4"]
 [ext_resource type="Resource" uid="uid://bsegj7wby3wm1" path="res://Cards/Data/Defense/Shield.tres" id="12_he0cp"]
 [ext_resource type="Script" uid="uid://djn1peikqaqw3" path="res://hand.gd" id="13_a4egk"]
-[ext_resource type="Resource" uid="uid://bpxcpd6edc3u1" path="res://Cards/Data/Attack/FireSlash.tres" id="13_fireslash"]
-[ext_resource type="Resource" path="res://Cards/Data/Buff/EnchantedSword.tres" id="14_enchanted"]
 [ext_resource type="Script" uid="uid://2byr5g5sl7w2" path="res://Relic/RelicData.gd" id="15_wcprl"]
 [ext_resource type="Resource" uid="uid://ckg15us7uerf5" path="res://Relic/Data/WarBanner.tres" id="16_fwncr"]
-[ext_resource type="Resource" path="res://Cards/Data/Attack/QuickSlash.tres" id="17_quickslash"]
+[ext_resource type="Resource" uid="uid://c8dl5vqxjpm5a" path="res://Cards/Data/Attack/QuickSlash.tres" id="17_quickslash"]
 [ext_resource type="Resource" path="res://Cards/Data/Defense/SecondWind.tres" id="18_secondwind"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_topbar"]
@@ -54,6 +52,14 @@ corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
 corner_detail = 2
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.08, 0.08, 0.1, 0.6)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+corner_detail = 2
+
 [sub_resource type="Gradient" id="Gradient_energy"]
 offsets = PackedFloat32Array(0, 0.51648355, 1)
 colors = PackedColorArray(1, 0.6821191, 0.6319212, 0, 0.85, 0.2, 0.05, 1, 0.95553523, 0.55430347, 0.4563604, 0)
@@ -63,14 +69,6 @@ gradient = SubResource("Gradient_energy")
 fill = 1
 fill_from = Vector2(0.5, 0.5)
 fill_to = Vector2(0.3, 0)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-bg_color = Color(0.08, 0.08, 0.1, 0.6)
-corner_radius_top_left = 8
-corner_radius_top_right = 8
-corner_radius_bottom_right = 8
-corner_radius_bottom_left = 8
-corner_detail = 2
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_562p4"]
 texture = ExtResource("5_34m47")
@@ -383,21 +381,26 @@ metadata/_edit_lock_ = true
 [node name="TopBar" type="PanelContainer" parent="UI/HudRoot" unique_id=1580670237]
 layout_mode = 0
 anchor_right = 1.0
-offset_bottom = 44.0
+offset_bottom = 52.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_topbar")
 
 [node name="Margin" type="MarginContainer" parent="UI/HudRoot/TopBar" unique_id=1422442904]
 layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 8
 
 [node name="Row" type="HBoxContainer" parent="UI/HudRoot/TopBar/Margin" unique_id=761527735]
 layout_mode = 2
+theme_override_constants/separation = 14
 
 [node name="LeftGroup" type="HBoxContainer" parent="UI/HudRoot/TopBar/Margin/Row" unique_id=36900521]
 layout_mode = 2
-size_flags_horizontal = 3
+theme_override_constants/separation = 10
 
 [node name="SpeedBtn" type="Button" parent="UI/HudRoot/TopBar/Margin/Row/LeftGroup" unique_id=2093430596]
-custom_minimum_size = Vector2(55, 51)
+custom_minimum_size = Vector2(52, 36)
 layout_mode = 2
 theme_override_styles/normal = SubResource("StyleBoxFlat_btn")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_pressed")
@@ -406,57 +409,157 @@ text = "x1"
 
 [node name="GoldLabel" type="Label" parent="UI/HudRoot/TopBar/Margin/Row/LeftGroup" unique_id=1423104190]
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 18
 text = "Gold: 0"
 
 [node name="TopSpacer" type="Control" parent="UI/HudRoot/TopBar/Margin/Row" unique_id=14304373]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="RightGroup" type="VBoxContainer" parent="UI/HudRoot/TopBar/Margin/Row" unique_id=601389813]
+[node name="CenterGroup" type="VBoxContainer" parent="UI/HudRoot/TopBar/Margin/Row" unique_id=1037476347]
 layout_mode = 2
-size_flags_horizontal = 0
+alignment = 1
 
-[node name="EnemyHP" type="Label" parent="UI/HudRoot/TopBar/Margin/Row/RightGroup" unique_id=494745270]
+[node name="TurnTimeRow" type="HBoxContainer" parent="UI/HudRoot/TopBar/Margin/Row/CenterGroup" unique_id=1524409758]
 layout_mode = 2
-theme_override_font_sizes/font_size = 16
-text = "Enemy"
+theme_override_constants/separation = 10
+alignment = 1
 
-[node name="TurnLabel" type="Label" parent="UI/HudRoot" unique_id=1857700991]
-layout_mode = 0
-offset_left = 525.0
-offset_top = 10.0
-offset_right = 650.0
-offset_bottom = 34.0
-theme_override_font_sizes/font_size = 16
+[node name="TurnLabel" type="Label" parent="UI/HudRoot/TopBar/Margin/Row/CenterGroup/TurnTimeRow" unique_id=1857700991]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
 text = "Turn: 1"
 horizontal_alignment = 1
 
-[node name="EnemyIntent" type="Label" parent="UI/HudRoot" unique_id=961889181]
-layout_mode = 0
-offset_left = 932.0
-offset_top = 435.0
-offset_right = 1132.0
-offset_bottom = 457.0
-theme_override_font_sizes/font_size = 14
+[node name="TimeLabel" type="Label" parent="UI/HudRoot/TopBar/Margin/Row/CenterGroup/TurnTimeRow" unique_id=2073142853]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Day | Flux 0"
 horizontal_alignment = 1
 
-[node name="EnemyStatus" type="HBoxContainer" parent="UI/HudRoot" unique_id=470291512]
+[node name="TimeInfoBtn" type="Button" parent="UI/HudRoot/TopBar/Margin/Row/CenterGroup/TurnTimeRow" unique_id=1054422377]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_pressed")
+theme_override_styles/hover = SubResource("StyleBoxFlat_btn")
+text = "!"
+
+[node name="RightControls" type="HBoxContainer" parent="UI/HudRoot/TopBar/Margin/Row" unique_id=609169184]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 2
+
+[node name="TimeToggleBtn" type="Button" parent="UI/HudRoot/TopBar/Margin/Row/RightControls" unique_id=1119028913]
+custom_minimum_size = Vector2(118, 34)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_pressed")
+theme_override_styles/hover = SubResource("StyleBoxFlat_btn")
+text = "Toggle Time"
+
+[node name="SaveExitButton" type="Button" parent="UI/HudRoot/TopBar/Margin/Row/RightControls" unique_id=1031554303]
+custom_minimum_size = Vector2(176, 34)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_pressed")
+theme_override_styles/hover = SubResource("StyleBoxFlat_btn")
+text = "Menu"
+
+[node name="TopMetaPanel" type="PanelContainer" parent="UI/HudRoot" unique_id=127289990]
 layout_mode = 0
-offset_left = 965.0
-offset_top = 610.0
-offset_right = 1098.0
-offset_bottom = 634.0
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -210.0
+offset_top = 58.0
+offset_right = 210.0
+offset_bottom = 88.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_topbar")
+
+[node name="Margin" type="MarginContainer" parent="UI/HudRoot/TopMetaPanel" unique_id=2143412000]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 6
+
+[node name="MetaRow" type="HBoxContainer" parent="UI/HudRoot/TopMetaPanel/Margin" unique_id=1355939436]
+layout_mode = 2
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="OverheatLabel" type="Label" parent="UI/HudRoot/TopMetaPanel/Margin/MetaRow" unique_id=1158151335]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.58, 0.32, 1)
+theme_override_font_sizes/font_size = 12
+text = "Heat 0/10"
+
+[node name="StanceLabel" type="Label" parent="UI/HudRoot/TopMetaPanel/Margin/MetaRow" unique_id=1462457412]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.93, 0.78, 1)
+theme_override_font_sizes/font_size = 12
+text = "Position: Center"
+
+[node name="EchoLabel" type="Label" parent="UI/HudRoot/TopMetaPanel/Margin/MetaRow" unique_id=465867060]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.92, 1, 1)
+theme_override_font_sizes/font_size = 12
+text = "Echo 0/0/0"
+
+[node name="MutatorLabel" type="Label" parent="UI/HudRoot/TopMetaPanel/Margin/MetaRow" unique_id=1723894176]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.86, 0.78, 0.65, 1)
+theme_override_font_sizes/font_size = 12
+text = "Mutator: None"
+
+[node name="EnemyInfoPanel" type="PanelContainer" parent="UI/HudRoot" unique_id=494745270]
+visible = false
+layout_mode = 0
+offset_left = 858.0
+offset_top = 374.0
+offset_right = 1114.0
+offset_bottom = 442.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Margin" type="MarginContainer" parent="UI/HudRoot/EnemyInfoPanel" unique_id=1929753154]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="VBox" type="VBoxContainer" parent="UI/HudRoot/EnemyInfoPanel/Margin" unique_id=9112991]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="EnemyIntent" type="Label" parent="UI/HudRoot/EnemyInfoPanel/Margin/VBox" unique_id=961889181]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 1
+
+[node name="EnemyName" type="Label" parent="UI/HudRoot/EnemyInfoPanel/Margin/VBox" unique_id=113398271]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 1
+
+[node name="EnemyStatus" type="HBoxContainer" parent="UI/HudRoot/EnemyInfoPanel/Margin/VBox" unique_id=470291512]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 6
+alignment = 1
 
 [node name="EnergyOrb" type="Control" parent="UI/HudRoot" unique_id=1950032146]
 layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_left = 249.0
-offset_top = -109.0
-offset_right = 308.0
-offset_bottom = -50.0
+offset_left = 195.0
+offset_top = -104.0
+offset_right = 254.0
+offset_bottom = -45.0
 grow_vertical = 0
 
 [node name="Orb" type="TextureRect" parent="UI/HudRoot/EnergyOrb" unique_id=1902031404]
@@ -519,10 +622,10 @@ vertical_alignment = 1
 
 [node name="EnemyBar" type="Control" parent="UI/HudRoot" unique_id=784934237]
 anchors_preset = 0
-offset_left = 949.0
-offset_top = 584.0
-offset_right = 1113.0
-offset_bottom = 608.0
+offset_left = 919.0
+offset_top = 623.0
+offset_right = 1143.0
+offset_bottom = 647.0
 
 [node name="Back" type="ColorRect" parent="UI/HudRoot/EnemyBar" unique_id=1468975542]
 layout_mode = 1
@@ -556,10 +659,10 @@ layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_left = 12.0
-offset_top = -421.0
-offset_right = 230.0
-offset_bottom = -285.0
+offset_left = 16.0
+offset_top = -244.0
+offset_right = 154.0
+offset_bottom = -172.0
 grow_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
@@ -568,6 +671,7 @@ layout_mode = 2
 
 [node name="VBox" type="VBoxContainer" parent="UI/HudRoot/PlayerPanel/Margin" unique_id=1162756756]
 layout_mode = 2
+theme_override_constants/separation = 2
 
 [node name="EnergyLabel" type="Label" parent="UI/HudRoot/PlayerPanel/Margin/VBox" unique_id=430405632]
 visible = false
@@ -577,22 +681,22 @@ text = "Energy: 0/0"
 
 [node name="BuffStacksLabel" type="Label" parent="UI/HudRoot/PlayerPanel/Margin/VBox" unique_id=1304401442]
 layout_mode = 2
-theme_override_font_sizes/font_size = 14
-text = "Enchanted: 0"
+theme_override_font_sizes/font_size = 12
+text = "Enchant: 0"
 
 [node name="DeckLabel" type="Label" parent="UI/HudRoot/PlayerPanel/Margin/VBox" unique_id=1386825217]
 layout_mode = 2
-theme_override_font_sizes/font_size = 14
-text = "Deck: 0"
+theme_override_font_sizes/font_size = 12
+text = "Draw: 0"
 
 [node name="DiscardLabel" type="Label" parent="UI/HudRoot/PlayerPanel/Margin/VBox" unique_id=1864124823]
 layout_mode = 2
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 12
 text = "Discard: 0"
 
 [node name="ExhaustLabel" type="Label" parent="UI/HudRoot/PlayerPanel/Margin/VBox" unique_id=2054477119]
 layout_mode = 2
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 12
 text = "Exhaust: 0"
 
 [node name="EndTurnBtn" type="Button" parent="UI/HudRoot" unique_id=425702897]
@@ -603,9 +707,9 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -149.0
-offset_top = -285.0
+offset_top = -335.0
 offset_right = -7.5600586
-offset_bottom = -251.0
+offset_bottom = -301.0
 grow_horizontal = 0
 grow_vertical = 0
 theme_override_styles/normal = SubResource("StyleBoxFlat_btn")

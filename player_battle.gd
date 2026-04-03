@@ -114,16 +114,25 @@ func play_death() -> void:
 
 func attack_sequence(target: Node2D) -> void:
 	if busy or anim == null: return
+	if is_dead: return
 	busy = true
 	face_towards(target.global_position)
 	_play("Attack")
 	await _wait_hit_frame()
+	if is_dead:
+		return
 	if use_hitstop: await _hitstop()
+	if is_dead:
+		return
 	emit_signal("hit_enemy", target)
 	await get_tree().create_timer(after_hit_delay_real, false, false, true).timeout
+	if is_dead:
+		return
 	if anim.sprite_frames and anim.sprite_frames.has_animation("After_Attack"):
 		_play("After_Attack")
 		await get_tree().create_timer(0.12, false, false, true).timeout
+		if is_dead:
+			return
 	busy = false
 	_play("Idle")
 
@@ -142,5 +151,7 @@ func _hitstop() -> void:
 
 func _play(name: String) -> void:
 	if anim == null: return
+	if is_dead and name != "Death":
+		return
 	if anim.sprite_frames and anim.sprite_frames.has_animation(name):
 		if anim.animation != name: anim.play(name)
